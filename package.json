@@ -1,0 +1,54 @@
+{
+  "name": "sunim-crew",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An installable agentic crew that ships design system components.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "exports": {
+    "./config": "./dist/config/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "config:check": "npm run build && node --env-file-if-exists=.env dist/config/check.js",
+    "airtable:check": "npm run build && node --env-file-if-exists=.env dist/airtable/check.js",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,json,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "airtable": "^0.12.2",
+    "asana": "^3.1.1",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^20.19.9",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "$comment": [
+    "Copy to sunim.config.json and set your own values. Names and ids only,",
+    "never a secret: every token lives in the environment, see .env.example.",
+    "The crew addresses Airtable by NAME and resolves each name to your base's",
+    "ids at startup, so a duplicated base needs only a new airtable.baseId.",
+    "Change the tables and fields maps only if your base uses other names."
+  ],
+  "airtable": {
+    "baseId": "appXXXXXXXXXXXXXX",
+    "tables": {
+      "components": "Components",
+      "tests": "Storybook Testing"
+    },
+    "fields": {
+      "figma": "Figma",
+      "design": "Design",
+      "commit": "Commit",
+      "storybook": "Storybook",
+      "stagingUrl": "Staging URL",
+      "productionUrl": "Production URL",
+      "astro": "Astro Link",
+      "development": "Development",
+      "synchronization": "Synchronization %",
+      "totalTests": "Total Tests",
+      "passedTests": "Passed Tests",
+      "testResults": "Testing Results",
+      "componentLink": "Composed in"
+    }
+  },
+  "asana": {
+    "workspaceId": "0000000000000000",
+    "projectId": "0000000000000000",
+    "agents": {
+      "engineer": "",
+      "qa": "",
+      "devops": "",
+      "manager": ""
+    }
+  },
+  "figma": {
+    "fileKey": ""
+  },
+  "repo": {
+    "pathOrUrl": "/absolute/path/to/your/design-system",
+    "stagingBranch": "staging",
+    "mainBranch": "main",
+    "slug": "owner/design-system"
+  },
+  "npm": {
+    "registry": "https://registry.npmjs.org"
+  }
+}
