@@ -1,0 +1,29 @@
+# Secrets and the real config. Nothing with your values in it is tracked.
+.env
+.env.*
+!.env.example
+sunim.config.json
+sunim.config.*.json
+!sunim.config.example.json
+*.pem
+*.key
+.npmrc
+
+# Build output
+dist/
+coverage/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Runtime output from delegations
+logs/
+prompts/
+.sunim/
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
