@@ -317,6 +317,12 @@ export function createClient(
       if (patch.result !== undefined) {
         payload[field('testResults').id] = patch.result;
       }
+      if (patch.expected !== undefined) {
+        payload[field('expectedResults').id] = patch.expected;
+      }
+      if (patch.suggestion !== undefined) {
+        payload[field('suggestion').id] = patch.suggestion;
+      }
       if (Object.keys(payload).length === 0) {
         throw new Error('updateTestRow was given nothing to write');
       }

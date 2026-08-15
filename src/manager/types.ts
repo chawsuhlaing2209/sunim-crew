@@ -74,7 +74,8 @@ export interface StageEvidence {
 
 /** What one derived status asks the manager to do next. */
 export interface StageAction {
-  readonly stage: Exclude<Stage, 'Fix'>;
+  /** Fix only appears with perFailedRow, since it is one subtask per case. */
+  readonly stage: Stage;
   readonly role: AgentRole;
   /** The evidence this stage produces, when it produces a field. */
   readonly evidence?: StageEvidence;
@@ -87,6 +88,16 @@ export interface StageAction {
     port: VerifyPort,
     component: ComponentRow,
   ) => Promise<Result>;
+  /**
+   * This status is not one stage with one subtask. It opens one Fix subtask
+   * per failed row and works through them.
+   */
+  readonly perFailedRow?: boolean;
+  /**
+   * The stage ran once already and has to run again. Its subtask is reopened
+   * before the lane is asked to do anything.
+   */
+  readonly retest?: boolean;
   /** Set when a later step owns this status. */
   readonly deferredTo?: string;
 }

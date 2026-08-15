@@ -1,4 +1,8 @@
-import type { AirtableClient, ComponentRow } from '../airtable/index.js';
+import type {
+  AirtableClient,
+  ComponentRow,
+  TestRow,
+} from '../airtable/index.js';
 import { MANAGER_MARKER, airtableRowUrl } from '../asana/index.js';
 import type { AgentRole, AsanaClient, Stage, Subtask } from '../asana/index.js';
 import type { AgentKey, Config } from '../config/index.js';
@@ -21,6 +25,15 @@ import type {
  */
 export type Lane = (component: ComponentRow) => Promise<LaneRun>;
 
+/**
+ * The fix lane is per case, not per stage: one failed row, one subtask, one
+ * worker, one change. It is keyed separately for that reason.
+ */
+export type FixLane = (
+  component: ComponentRow,
+  row: TestRow,
+) => Promise<LaneRun>;
+
 export interface SweepDeps {
   readonly config: Config;
   readonly airtable: AirtableClient;
@@ -28,6 +41,8 @@ export interface SweepDeps {
   readonly verify: VerifyPort;
   /** Keyed by stage. Only the stages you want run automatically.  */
   readonly lanes?: Partial<Record<Exclude<Stage, 'Fix'>, Lane>>;
+  /** Runs one failed case. Separate, because Fix fans out over rows. */
+  readonly fixLane?: FixLane;
 }
 
 const ROLE_TO_AGENT: Readonly<Record<AgentRole, AgentKey>> = {
@@ -134,18 +149,33 @@ async function sweepOne(
   });
 
   const assignee = deps.config.asana.agents[ROLE_TO_AGENT[action.role]];
+
+  // A status that is one subtask per failed case rather than one per stage.
+  if (action.perFailedRow === true) {
+    return await sweepFixes(component, action, task.gid, base, deps);
+  }
+
+  if (action.stage === 'Fix') {
+    return {
+      ...base,
+      kind: 'deferred',
+      note: 'a Fix stage only ever runs one case at a time',
+    };
+  }
+
+  const stage = action.stage;
   const existing = (await deps.asana.listSubtasks(task.gid)).find(
-    (subtask) => subtask.name === action.stage,
+    (subtask) => subtask.name === stage,
   );
 
-  const subtask = await deps.asana.ensureSubtask(task.gid, action.stage, {
+  const subtask = await deps.asana.ensureSubtask(task.gid, stage, {
     ...(assignee === undefined ? {} : { assignee }),
   });
 
   const opened = existing === undefined;
   const shared = {
     ...base,
-    stage: action.stage,
+    stage,
     role: action.role,
     taskGid: task.gid,
     subtaskGid: subtask.gid,
@@ -153,16 +183,25 @@ async function sweepOne(
 
   let current = subtask;
 
+  // The stage ran before and has to run again. Every row is marked fixed, so
+  // the Test subtask goes back to QA rather than being read as still done.
+  if (action.retest === true && current.completed) {
+    current = await deps.asana.reopenSubtask(current.gid);
+    if (assignee !== undefined) {
+      current = await deps.asana.assignSubtask(current.gid, assignee);
+    }
+  }
+
   if (!current.completed) {
-    const lane = deps.lanes?.[action.stage];
+    const lane = deps.lanes?.[stage];
 
     if (lane === undefined) {
       return {
         ...shared,
         kind: opened ? 'assigned' : 'waiting',
         note: opened
-          ? `opened ${action.stage} for the ${action.role}${assignee === undefined ? ', unassigned' : ''}`
-          : `${action.stage} is with the ${action.role}, not done yet`,
+          ? `opened ${stage} for the ${action.role}${assignee === undefined ? ', unassigned' : ''}`
+          : `${stage} is with the ${action.role}, not done yet`,
       };
     }
 
@@ -184,7 +223,7 @@ async function sweepOne(
       const fix = await deps.asana.ensureFixSubtask(
         task.gid,
         {
-          caseName: `${action.stage} build`,
+          caseName: `${stage} build`,
           expected: `${component.name} builds and reaches ${deps.config.repo.stagingBranch}`,
           suggestion: run.blocked.reason.slice(0, FIX_DETAIL_LIMIT),
         },
@@ -229,6 +268,100 @@ async function sweepOne(
 }
 
 /**
+ * One Fix subtask per failed row, each carrying only its own case.
+ *
+ * The engineer applies the suggestion and reports. It cannot mark the row,
+ * and that is the point: a worker that could mark its own case fixed could
+ * mark every case fixed, and the retest would be checking nothing. So the
+ * manager marks the row, once the worker has actually run and reported.
+ */
+async function sweepFixes(
+  component: ComponentRow,
+  action: StageAction,
+  taskGid: string,
+  base: Omit<ComponentOutcome, 'kind' | 'note'>,
+  deps: SweepDeps,
+): Promise<ComponentOutcome> {
+  const rows = await deps.airtable.listTestRows(component.id);
+  const failed = rows.filter((row) => row.result === 'Failed');
+  const assignee = deps.config.asana.agents.engineer;
+
+  const shared = {
+    ...base,
+    stage: 'Fix' as const,
+    role: action.role,
+    taskGid,
+  };
+
+  if (failed.length === 0) {
+    const waiting = rows.filter(
+      (row) => row.result === 'Fixed (To re-test)',
+    ).length;
+    return {
+      ...shared,
+      kind: 'waiting',
+      note: `${waiting} of ${rows.length} cases are fixed and waiting to be retested`,
+    };
+  }
+
+  const fixed: string[] = [];
+  const notes: string[] = [];
+
+  for (const row of failed) {
+    // Only the case name, the expected result and the suggestion travel.
+    const subtask = await deps.asana.ensureFixSubtask(
+      taskGid,
+      {
+        caseName: row.name,
+        expected: row.expected ?? 'not recorded',
+        suggestion: row.suggestion ?? 'not recorded',
+      },
+      { ...(assignee === undefined ? {} : { assignee }) },
+    );
+
+    if (subtask.completed) continue;
+    if (deps.fixLane === undefined) {
+      notes.push(`"${row.name}" is with the Engineer`);
+      continue;
+    }
+
+    const run = await deps.fixLane(component, row);
+
+    if (run.report.trim() !== '') {
+      await deps.asana.reportOnSubtask(
+        subtask.gid,
+        ['Engineer, via the crew', '', run.report.trim()].join('\n'),
+      );
+    }
+
+    if (!run.ok) {
+      notes.push(run.note);
+      continue;
+    }
+
+    // The worker did the work and said so. Now, and only now, the row moves
+    // to Fixed (To re-test), and the formula reads that on its own.
+    await deps.airtable.updateTestRow(row.id, { result: 'Fixed (To re-test)' });
+    await deps.asana.completeSubtask(subtask.gid);
+    fixed.push(row.name);
+  }
+
+  const note = [
+    `${failed.length} failed cases`,
+    fixed.length > 0 ? `${fixed.length} marked fixed to re-test` : undefined,
+    ...notes,
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join(', ');
+
+  return {
+    ...shared,
+    kind: fixed.length > 0 ? 'verified' : 'waiting',
+    note,
+  };
+}
+
+/**
  * Put QA's cases into the base, one row each, with its screenshot attached.
  *
  * A case whose screenshot is missing is written anyway, and the missing file
@@ -242,13 +375,40 @@ export async function recordCases(
 ): Promise<{ written: number; problems: string[] }> {
   const problems: string[] = [];
 
-  // A sweep that runs twice must not write the same case twice.
-  const existing = new Set(
-    (await deps.airtable.listTestRows(component.id)).map((row) => row.name),
+  // A case the base already holds is updated, not written again. That is
+  // what a retest is: the same case, looked at a second time.
+  const existing = new Map(
+    (await deps.airtable.listTestRows(component.id)).map((row) => [
+      row.name,
+      row,
+    ]),
   );
-  const fresh = cases.filter((entry) => !existing.has(entry.row.name));
 
-  if (fresh.length === 0) return { written: 0, problems };
+  const fresh = cases.filter((entry) => !existing.has(entry.row.name));
+  const seen = cases.filter((entry) => existing.has(entry.row.name));
+
+  for (const entry of seen) {
+    const row = existing.get(entry.row.name);
+    if (row === undefined) continue;
+    await deps.airtable.updateTestRow(row.id, {
+      result: entry.row.result,
+      ...(entry.row.expected === undefined
+        ? {}
+        : { expected: entry.row.expected }),
+      ...(entry.row.suggestion === undefined
+        ? {}
+        : { suggestion: entry.row.suggestion }),
+    });
+    try {
+      await deps.airtable.attachToTestRow(row.id, entry.screenshotPath);
+    } catch (error) {
+      problems.push(
+        `the screenshot for "${entry.row.name}" did not attach: ${String(error)}`,
+      );
+    }
+  }
+
+  if (fresh.length === 0) return { written: seen.length, problems };
 
   const rows = await deps.airtable.createTestRows(
     component.id,
@@ -267,7 +427,7 @@ export async function recordCases(
     }
   }
 
-  return { written: rows.length, problems };
+  return { written: rows.length + seen.length, problems };
 }
 
 /**

@@ -32,6 +32,16 @@ export {
 export type { StageDeps, StageResult, StageTaskInput } from './stage.js';
 
 export {
+  FIX_TIMEOUT_MS,
+  FIX_TOOLS,
+  fixDelegation,
+  fixTask,
+  issueFromRow,
+  runFix,
+} from './fix.js';
+export type { FixDeps, FixTaskInput } from './fix.js';
+
+export {
   QA_TIMEOUT_MS,
   QA_TOOLS,
   RESULTS_FILENAME,

@@ -44,22 +44,28 @@ export const PLAN: Readonly<Partial<Record<DevelopmentStatus, StageAction>>> = {
     confirm: (port, component) => port.testRowsReal(component.id),
   },
 
+  // One Fix subtask per failed row, each carrying only its own case. The
+  // engineer applies the suggestion, and the manager marks the row.
   'To be fixed': {
-    stage: 'Test',
+    stage: 'Fix',
     role: 'Engineer',
-    deferredTo: 'step 10, the fix loop, one Fix subtask per failed row',
+    perFailedRow: true,
   },
 
+  // Some rows are marked, some are not. The same work, on what is left.
   Fixing: {
-    stage: 'Test',
+    stage: 'Fix',
     role: 'Engineer',
-    deferredTo: 'step 10, the fix loop',
+    perFailedRow: true,
   },
 
+  // Every row is marked Fixed (To re-test). Back to QA, who tests again and
+  // writes Passed or Failed, and the formula reads the rows as it always did.
   Fixed: {
     stage: 'Test',
     role: 'QA',
-    deferredTo: 'step 10, the retest that follows a fix',
+    retest: true,
+    confirm: (port, component) => port.testRowsReal(component.id),
   },
 
   'To be deployed': {

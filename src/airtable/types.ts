@@ -74,4 +74,6 @@ export interface NewTestRow {
 export interface TestRowPatch {
   readonly name?: string;
   readonly result?: TestResult;
+  readonly expected?: string;
+  readonly suggestion?: string;
 }

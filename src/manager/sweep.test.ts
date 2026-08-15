@@ -49,11 +49,16 @@ function derive(fields: Fields, rows: TestRow[]): DevelopmentStatus {
     return 'Completed';
   }
   if (rows.length > 0) {
-    if (rows.some((row) => row.result === 'Failed')) return 'To be fixed';
-    if (rows.every((row) => row.result === 'Fixed (To re-test)'))
-      return 'Fixed';
-    if (rows.some((row) => row.result === 'Fixed (To re-test)'))
-      return 'Fixing';
+    const retest = rows.filter(
+      (row) => row.result === 'Fixed (To re-test)',
+    ).length;
+    const failed = rows.filter((row) => row.result === 'Failed').length;
+
+    // All marked, nothing left to fix.
+    if (retest > 0 && failed === 0) return 'Fixed';
+    // Part way through a round: some marked, some still to do.
+    if (retest > 0 && failed > 0) return 'Fixing';
+    if (failed > 0) return 'To be fixed';
     if (rows.every((row) => row.result === 'Passed')) return 'To be deployed';
   }
   if (fields.storybook !== undefined) return 'Ready for Testing';
@@ -114,6 +119,24 @@ function fakeAirtable(
       rows.push(...created);
       return Promise.resolve(created);
     }),
+    updateTestRow: vi.fn(
+      (rowId: string, patch: { result?: string; expected?: string }) => {
+        const found = rows.findIndex((entry) => entry.id === rowId);
+        if (found >= 0) {
+          const before = rows[found] as TestRow;
+          rows[found] = {
+            ...before,
+            ...(patch.result === undefined
+              ? {}
+              : {
+                  result: patch.result as TestRow['result'],
+                  resultRaw: patch.result,
+                }),
+          };
+        }
+        return Promise.resolve(rows[found] as TestRow);
+      },
+    ),
     attachToTestRow: vi.fn((_rowId: string, filePath: string) => {
       if (options.failAttachments === true) {
         return Promise.reject(new Error(`ENOENT ${filePath}`));
@@ -208,6 +231,10 @@ function fakeAsana(
       // A comment is what readResult reads back, unless the manager wrote it.
       if (!text.startsWith(MANAGER_MARKER)) state.report = text;
       return Promise.resolve();
+    }),
+    assignSubtask: vi.fn((_gid: string, who: string) => {
+      state.assignee = who;
+      return Promise.resolve(current());
     }),
     reopenSubtask: vi.fn(() => {
       state.completed = false;
@@ -813,8 +840,10 @@ describe('the Test lane, wired', () => {
     const second = await recordCases(component(), cases, deps);
 
     expect(first.written).toBe(2);
-    expect(second.written).toBe(0);
+    // The second pass touches the same two rows rather than adding more.
+    expect(second.written).toBe(2);
     expect(airtable.rows).toHaveLength(2);
+    expect(airtable.createTestRows).toHaveBeenCalledTimes(1);
   });
 
   it('does not finish the stage when a screenshot would not attach', async () => {
@@ -864,6 +893,223 @@ describe('the Test lane, wired', () => {
 
     expect(report.counts.flagged).toBe(1);
     expect(asana.state.completed).toBe(false);
+  });
+});
+
+describe('the fix loop', () => {
+  const staged = {
+    figma: 'https://figma.com/file/abc',
+    commit: REAL_COMMIT,
+    storybook: 'https://staging.example.com/sb/',
+  };
+
+  const failedRow = (
+    name: string,
+    overrides: Partial<TestRow> = {},
+  ): TestRow => ({
+    id: `rec-${name}`,
+    name,
+    result: 'Failed',
+    resultRaw: 'Failed',
+    expected: 'Background resolves to the disabled surface token',
+    suggestion: 'Bind the disabled background to surface-disabled',
+    componentIds: ['recButton'],
+    attachments: [{ id: 'a', url: 'https://x/s.png', filename: 's.png' }],
+    ...overrides,
+  });
+
+  const passedRow = (name: string): TestRow =>
+    failedRow(name, { result: 'Passed', resultRaw: 'Passed' });
+
+  const fixed = () =>
+    ({
+      ok: true,
+      report: 'Bound it to surface-disabled. Tests pass.',
+      note: 'fixed it',
+      logPath: undefined,
+      durationMs: 1,
+      costUsd: undefined,
+    }) as const;
+
+  it('opens one Fix subtask per failed row, carrying only that case', async () => {
+    const airtable = fakeAirtable(staged, [
+      passedRow('Button, primary, md, hover'),
+      failedRow('Button, primary, md, disabled'),
+      failedRow('Button, secondary, lg, focus'),
+    ]);
+    const asana = fakeAsana({ name: 'Test', stage: 'Test' });
+
+    const report = await sweep({ config, airtable, asana, verify: port() });
+
+    expect(report.outcomes[0]?.status).toBe('To be fixed');
+    expect(asana.state.fixes).toHaveLength(2);
+    expect(asana.state.fixes.map((entry) => entry.issue.caseName)).toEqual([
+      'Button, primary, md, disabled',
+      'Button, secondary, lg, focus',
+    ]);
+    expect(asana.state.fixes[0]?.issue.suggestion).toContain(
+      'surface-disabled',
+    );
+    expect(asana.state.fixes[0]?.assignee).toBe('engineer@example.com');
+  });
+
+  it('marks the row only after the engineer has actually run', async () => {
+    const airtable = fakeAirtable(staged, [
+      passedRow('Button, primary, md, hover'),
+      failedRow('Button, primary, md, disabled'),
+    ]);
+    const asana = fakeAsana({ name: 'Test', stage: 'Test' });
+
+    // No fix lane wired, so nobody has done the work yet.
+    await sweep({ config, airtable, asana, verify: port() });
+    expect(
+      airtable.rows.find((r) => r.result === 'Fixed (To re-test)'),
+    ).toBeUndefined();
+
+    // Now with a worker.
+    await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port(),
+      fixLane: () => Promise.resolve(fixed()),
+    });
+
+    expect(
+      airtable.rows.find((r) => r.name === 'Button, primary, md, disabled')
+        ?.result,
+    ).toBe('Fixed (To re-test)');
+  });
+
+  it('shows Fixing while some remain, and Fixed when all are marked', async () => {
+    const airtable = fakeAirtable(staged, [failedRow('a'), failedRow('b')]);
+    const asana = fakeAsana({ name: 'Test', stage: 'Test' });
+
+    let calls = 0;
+    await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port(),
+      // Only the first case gets fixed this round.
+      fixLane: () =>
+        Promise.resolve(
+          calls++ === 0
+            ? fixed()
+            : { ...fixed(), ok: false, note: 'did not finish' },
+        ),
+    });
+
+    expect((await airtable.listComponents())[0]?.status).toBe('Fixing');
+
+    await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port(),
+      fixLane: () => Promise.resolve(fixed()),
+    });
+
+    expect((await airtable.listComponents())[0]?.status).toBe('Fixed');
+  });
+
+  it('leaves a fix that did not finish for the next sweep', async () => {
+    const airtable = fakeAirtable(staged, [failedRow('a')]);
+    const asana = fakeAsana({ name: 'Test', stage: 'Test' });
+
+    const report = await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port(),
+      fixLane: () =>
+        Promise.resolve({ ...fixed(), ok: false, note: 'the fix timed out' }),
+    });
+
+    expect(airtable.rows[0]?.result).toBe('Failed');
+    expect(report.outcomes[0]?.note).toContain('timed out');
+    expect((await airtable.listComponents())[0]?.status).toBe('To be fixed');
+  });
+
+  it('sends a fixed component back to QA, reopening the Test subtask', async () => {
+    const airtable = fakeAirtable(staged, [
+      failedRow('a', {
+        result: 'Fixed (To re-test)',
+        resultRaw: 'Fixed (To re-test)',
+      }),
+    ]);
+    const asana = fakeAsana({
+      name: 'Test',
+      stage: 'Test',
+      completed: true,
+    });
+
+    const report = await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port(),
+      lanes: {
+        Test: () =>
+          Promise.resolve({
+            ok: true,
+            report: 'Retested. Passed.',
+            note: 'QA retested',
+            logPath: undefined,
+            durationMs: 1,
+            costUsd: undefined,
+            cases: [
+              {
+                row: { name: 'a', result: 'Passed' as const },
+                screenshotPath: '/tmp/a.png',
+              },
+            ],
+          }),
+      },
+    });
+
+    expect(asana.reopenSubtask).toHaveBeenCalled();
+    expect(asana.state.assignee).toBe('qa@example.com');
+    expect(report.outcomes[0]?.role).toBe('QA');
+  });
+
+  it('a retest updates the row it wrote, rather than adding a second one', async () => {
+    const airtable = fakeAirtable(staged, [
+      failedRow('a', {
+        result: 'Fixed (To re-test)',
+        resultRaw: 'Fixed (To re-test)',
+      }),
+    ]);
+    const asana = fakeAsana({ name: 'Test', stage: 'Test', completed: true });
+
+    await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port(),
+      lanes: {
+        Test: () =>
+          Promise.resolve({
+            ok: true,
+            report: 'Retested.',
+            note: 'QA retested',
+            logPath: undefined,
+            durationMs: 1,
+            costUsd: undefined,
+            cases: [
+              {
+                row: { name: 'a', result: 'Passed' as const },
+                screenshotPath: '/tmp/a.png',
+              },
+            ],
+          }),
+      },
+    });
+
+    expect(airtable.rows).toHaveLength(1);
+    expect(airtable.rows[0]?.result).toBe('Passed');
+    // And the formula, reading the rows, takes it the rest of the way.
+    expect((await airtable.listComponents())[0]?.status).toBe('To be deployed');
   });
 });
 
@@ -954,10 +1200,10 @@ describe('sweep', () => {
         {
           id: 'r1',
           name: 'Button, primary, hover',
-          result: 'Failed',
-          resultRaw: 'Failed',
-          expected: 'the accent hover token',
-          suggestion: 'bind hover to accent-hover',
+          result: 'Passed',
+          resultRaw: 'Passed',
+          expected: undefined,
+          suggestion: undefined,
           componentIds: ['recButton'],
           attachments: [],
         },
@@ -967,9 +1213,10 @@ describe('sweep', () => {
 
     const report = await sweep({ config, airtable, asana, verify: port() });
 
-    expect(report.outcomes[0]?.status).toBe('To be fixed');
+    // To be fixed is handled now. To be deployed is what waits for a person.
+    expect(report.outcomes[0]?.status).toBe('To be deployed');
     expect(report.outcomes[0]?.kind).toBe('deferred');
-    expect(report.outcomes[0]?.note).toContain('step 10');
+    expect(report.outcomes[0]?.note).toContain('step 11');
   });
 
   it('leaves a completed component alone', async () => {
