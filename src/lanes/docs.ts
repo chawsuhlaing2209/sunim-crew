@@ -4,7 +4,7 @@ import type { Config } from '../config/index.js';
 import type { DelegateOptions } from '../runner/index.js';
 import { REQUIRED_SECTIONS } from '../verify/index.js';
 import { readBrief } from './briefs.js';
-import { branchFor, workerEnv, workerLimits } from './implementation.js';
+import { branchFor, workerEnv, workerRun } from './implementation.js';
 import type { LaneRun, RunnerPort } from './implementation.js';
 
 export const DOCS_TOOLS: readonly string[] = [
@@ -117,7 +117,7 @@ export function docsDelegation(
     task: docsTask(input),
     cwd: config.repo.pathOrUrl,
     allowedTools: DOCS_TOOLS,
-    ...workerLimits(config, DOCS_TIMEOUT_MS),
+    ...workerRun(config, DOCS_TIMEOUT_MS),
     allowEnv: workerEnv(config, ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL']),
     ...(config.docs.path === undefined ? {} : { addDirs: [config.docs.path] }),
     ...(runDir === undefined ? {} : { runDir }),

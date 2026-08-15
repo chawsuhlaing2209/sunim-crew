@@ -5,10 +5,23 @@ import type { DelegateOptions } from './types.js';
  * code.claude.com/docs/en/headless, not guessed. Re-run the build-day check
  * when the CLI updates: this file is the only place flags are named.
  *
- * --bare        the documented mode for scripted calls. No host hooks, no
- *               plugins, no MCP auto-discovery, no CLAUDE.md from the working
- *               directory. A teammate's local setup cannot change what a
- *               worker does. Auth is strictly ANTHROPIC_API_KEY.
+ * --bare        no host hooks, no plugins, no MCP auto-discovery, no
+ *               CLAUDE.md from the working directory. A teammate's local
+ *               setup cannot change what a worker does.
+ *
+ *               And, measured rather than assumed: under --bare the only auth
+ *               is ANTHROPIC_API_KEY. A signed-in Claude subscription is
+ *               refused with "Not logged in · Please run /login", while the
+ *               same call without the flag answers normally. So the flag is
+ *               set only when somebody chose to spend an API key. On a
+ *               subscription it is left off, and the isolation that matters
+ *               is kept by the parts that do not cost the sign-in: the
+ *               environment allowlist, the tool allowlist, and
+ *               --strict-mcp-config.
+ *
+ *               Leaving it off also lets the worker read the CLAUDE.md of the
+ *               repo it is building into, which is where that repo says how a
+ *               component is built there.
  * -p            non-interactive. Reads the prompt from stdin.
  * --output-format stream-json
  *               newline delimited events, so the log fills as work happens
@@ -25,7 +38,6 @@ import type { DelegateOptions } from './types.js';
 export const CLI_BINARY = 'claude';
 
 export const BASE_FLAGS: readonly string[] = [
-  '--bare',
   '-p',
   '--permission-mode',
   'dontAsk',
@@ -53,7 +65,12 @@ export const ALWAYS_DISALLOWED_TOOLS: readonly string[] = [
 
 export function buildArgs(options: DelegateOptions): string[] {
   const format = outputFormatFor(options);
-  const args = [...BASE_FLAGS, '--output-format', format];
+  const args = [
+    ...(options.bare === true ? ['--bare'] : []),
+    ...BASE_FLAGS,
+    '--output-format',
+    format,
+  ];
 
   // stream-json only emits events when --verbose is on.
   if (format === 'stream-json') args.push('--verbose');

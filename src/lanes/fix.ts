@@ -3,7 +3,7 @@ import type { FixIssue } from '../asana/index.js';
 import type { Config } from '../config/index.js';
 import type { DelegateOptions } from '../runner/index.js';
 import { readBrief } from './briefs.js';
-import { branchFor, workerEnv, workerLimits } from './implementation.js';
+import { branchFor, workerEnv, workerRun } from './implementation.js';
 import type { LaneRun, RunnerPort } from './implementation.js';
 
 /**
@@ -93,7 +93,7 @@ export function fixDelegation(
     task: fixTask(input),
     cwd: config.repo.pathOrUrl,
     allowedTools: FIX_TOOLS,
-    ...workerLimits(config, FIX_TIMEOUT_MS),
+    ...workerRun(config, FIX_TIMEOUT_MS),
     allowEnv: workerEnv(config, ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL']),
     ...(runDir === undefined ? {} : { runDir }),
   };

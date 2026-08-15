@@ -32,6 +32,12 @@ export interface DelegateOptions {
   readonly jsonSchema?: Readonly<Record<string, unknown>>;
   /** Environment names to pass through, never a forbidden one. */
   readonly allowEnv?: readonly string[];
+  /**
+   * Run with --bare: no hooks, no plugins, no CLAUDE.md from the working
+   * directory. Only usable when the child has an API key, because --bare
+   * refuses a Claude subscription sign-in.
+   */
+  readonly bare?: boolean;
   /** Where prompts and logs are written. */
   readonly runDir?: string;
 }

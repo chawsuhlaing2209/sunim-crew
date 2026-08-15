@@ -159,10 +159,13 @@ describe('the child environment', () => {
 });
 
 describe('the flags', () => {
-  it('runs bare, headless, and never stops to ask a person', () => {
+  it('runs headless, isolated, and never stops to ask a person', () => {
     const args = buildArgs(OPTIONS);
 
-    expect(args).toContain('--bare');
+    // --bare is off unless asked for: it refuses a subscription sign-in, and
+    // the isolation that matters does not depend on it.
+    expect(args).not.toContain('--bare');
+    expect(buildArgs({ ...OPTIONS, bare: true })).toContain('--bare');
     expect(args).toContain('-p');
     expect(args).toContain('--strict-mcp-config');
     expect(args.join(' ')).toContain('--permission-mode dontAsk');
@@ -304,7 +307,7 @@ describe('delegate', () => {
     const result = await run;
     const log = await readFile(result.logPath, 'utf8');
 
-    expect(log).toContain('--bare');
+    expect(log).toContain('--strict-mcp-config');
     expect(log).toContain('"type":"system"');
     expect(log).toContain('a warning');
   });

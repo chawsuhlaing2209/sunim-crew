@@ -106,17 +106,25 @@ export function branchFor(component: ComponentRow): string {
 }
 
 /**
- * The model and the ceiling for one delegation.
+ * How one delegation runs: which model, how long, and how isolated.
  *
  * Every lane has a timeout sized to its own craft. A configured ceiling only
  * ever lowers one, never raises it: somebody running on a subscription is
  * protecting a window they share with the rest of their day, and a lane that
  * quietly ran longer than they asked would be the opposite of that.
+ *
+ * --bare is tied to the same choice, because it has to be. Under --bare the
+ * only auth the CLI accepts is an API key, and a signed-in subscription is
+ * refused outright. So the flag goes on only when somebody chose the API.
  */
-export function workerLimits(
+export function workerRun(
   config: Config,
   laneTimeoutMs: number,
-): { readonly model?: string; readonly timeoutMs: number } {
+): {
+  readonly model?: string;
+  readonly timeoutMs: number;
+  readonly bare: boolean;
+} {
   const cap = config.worker.maxMinutes;
   const ceiling = cap === undefined ? laneTimeoutMs : cap * 60 * 1000;
 
@@ -125,6 +133,7 @@ export function workerLimits(
       ? {}
       : { model: config.worker.model }),
     timeoutMs: Math.min(laneTimeoutMs, ceiling),
+    bare: config.worker.auth === 'api-key',
   };
 }
 
@@ -251,7 +260,7 @@ export function implementationDelegation(
     cwd: config.repo.pathOrUrl,
     allowedTools: IMPLEMENTATION_TOOLS,
     mcpConfig: figmaMcpConfig(config),
-    ...workerLimits(config, IMPLEMENTATION_TIMEOUT_MS),
+    ...workerRun(config, IMPLEMENTATION_TIMEOUT_MS),
     // The design source, and the visual test service. No Airtable, no npm.
     allowEnv: workerEnv(config, [
       'FIGMA_TOKEN',

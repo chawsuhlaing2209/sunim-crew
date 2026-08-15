@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ComponentRow } from '../airtable/index.js';
 import { loadConfig } from '../config/index.js';
 import type { Config } from '../config/index.js';
-import { FORBIDDEN_IN_CHILD, childEnv } from '../runner/index.js';
+import { FORBIDDEN_IN_CHILD, buildArgs, childEnv } from '../runner/index.js';
 import type { DelegateOptions, DelegateResult } from '../runner/index.js';
 import {
   IMPLEMENTATION_TIMEOUT_MS,
@@ -14,7 +14,7 @@ import {
   implementationDelegation,
   isLocalMcp,
   runImplementation,
-  workerLimits,
+  workerRun,
 } from './index.js';
 import type { RunnerPort } from './index.js';
 import { readFile } from 'node:fs/promises';
@@ -183,14 +183,10 @@ describe('what a worker is allowed to be', () => {
     });
 
   it('leaves the model to the CLI unless somebody pins one', () => {
+    expect(workerRun(config, IMPLEMENTATION_TIMEOUT_MS).model).toBeUndefined();
     expect(
-      workerLimits(config, IMPLEMENTATION_TIMEOUT_MS).model,
-    ).toBeUndefined();
-    expect(
-      workerLimits(
-        student({ WORKER_MODEL: 'sonnet' }),
-        IMPLEMENTATION_TIMEOUT_MS,
-      ).model,
+      workerRun(student({ WORKER_MODEL: 'sonnet' }), IMPLEMENTATION_TIMEOUT_MS)
+        .model,
     ).toBe('sonnet');
   });
 
@@ -198,16 +194,49 @@ describe('what a worker is allowed to be', () => {
     const capped = student({ WORKER_MAX_MINUTES: '20' });
 
     // 45 minutes of engineer, cut to the 20 a person asked for.
-    expect(workerLimits(capped, IMPLEMENTATION_TIMEOUT_MS).timeoutMs).toBe(
+    expect(workerRun(capped, IMPLEMENTATION_TIMEOUT_MS).timeoutMs).toBe(
       20 * 60 * 1000,
     );
     // A lane already shorter than the cap keeps its own, smaller, number.
-    expect(workerLimits(capped, 5 * 60 * 1000).timeoutMs).toBe(5 * 60 * 1000);
+    expect(workerRun(capped, 5 * 60 * 1000).timeoutMs).toBe(5 * 60 * 1000);
     // A cap longer than the lane does not extend it.
     expect(
-      workerLimits(student({ WORKER_MAX_MINUTES: '120' }), 5 * 60 * 1000)
+      workerRun(student({ WORKER_MAX_MINUTES: '120' }), 5 * 60 * 1000)
         .timeoutMs,
     ).toBe(5 * 60 * 1000);
+  });
+
+  it('leaves --bare off, because it refuses a subscription sign-in', () => {
+    // Measured, not assumed: with --bare the CLI answers a signed-in
+    // subscription with "Not logged in", and without it the same call works.
+    const options = implementationDelegation({
+      component: component(),
+      config: student({}),
+      designUrl: 'https://figma.com/design/abc/DS?node-id=1-2',
+      branch: 'component/button',
+      brief: '# Engineer',
+    });
+
+    expect(options.bare).toBe(false);
+    expect(buildArgs(options)).not.toContain('--bare');
+    // The isolation that does not cost the sign-in stays on.
+    expect(buildArgs(options)).toContain('--strict-mcp-config');
+  });
+
+  it('turns --bare back on for somebody spending an API key', () => {
+    const options = implementationDelegation({
+      component: component(),
+      config: student({
+        ANTHROPIC_API_KEY: 'sk-ant-real',
+        WORKER_AUTH: 'api-key',
+      }),
+      designUrl: 'https://figma.com/design/abc/DS?node-id=1-2',
+      branch: 'component/button',
+      brief: '# Engineer',
+    });
+
+    expect(options.bare).toBe(true);
+    expect(buildArgs(options)).toContain('--bare');
   });
 
   it('hands a worker no API key, even when one is sitting right there', () => {

@@ -44,6 +44,22 @@ To spend metered API credit instead, say so on purpose:
 WORKER_AUTH=api-key
 ```
 
+A worker runs with `--bare` only in that second case. Under `--bare` the CLI
+takes an API key and nothing else, and answers a signed-in subscription with
+"Not logged in", so on a subscription the flag is left off. What keeps a
+worker bounded is the environment allowlist, the tool allowlist and
+`--strict-mcp-config`, none of which depend on it.
+
+One consequence worth knowing: without `--bare` a worker reads the
+`CLAUDE.md` of the repo it is building into. That is usually what you want,
+since that file is where the repo says how a component is built there. It
+also means a worker sees that machine's Claude Code settings, so a class
+should not keep surprising hooks in them.
+
+The cost figures in `logs/delegations.jsonl` still show dollars on a
+subscription. They are what the work would have cost on the API, not a
+charge. What a subscription actually spends is window, not money.
+
 ### On a Pro plan
 
 Everything works the same. What is different is the window: Pro's Claude Code
