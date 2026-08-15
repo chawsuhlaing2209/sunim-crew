@@ -12,6 +12,7 @@ export {
   implementationTask,
   isLocalMcp,
   runImplementation,
+  workerLimits,
 } from './implementation.js';
 export type {
   BlockedReport,

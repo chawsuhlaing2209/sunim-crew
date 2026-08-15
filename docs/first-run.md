@@ -40,6 +40,30 @@ claude
 /login
 ```
 
+### On a Pro plan
+
+Everything works the same. What is different is the window: Pro's Claude Code
+allowance is a good deal smaller than Max, and one engineer delegation can
+take a large piece of it. Two settings are there for that.
+
+```bash
+WORKER_MODEL=sonnet
+WORKER_MAX_MINUTES=20
+```
+
+`WORKER_MODEL` pins what every worker runs as, rather than leaving it to
+whatever each person's default happens to be. `WORKER_MAX_MINUTES` lowers
+every lane's ceiling, and only ever lowers it: the engineer's 45 minutes
+becomes 20, and QA's shorter one stays as it was.
+
+Expect a first component to take more than one sitting on Pro, and design the
+exercise for that. A sweep is one pass and then it stops, so running it again
+after a limit resets picks up exactly where the last one left off. Nothing is
+lost, because everything already verified is written down.
+
+When a worker runs out of window, the sweep stops spawning and says so,
+including the reset time when the worker gives one. That is not a fault to go
+and fix, and the message says as much.
 `npm run config:check` prints which of the two it will be, in as many words.
 Check it rather than assuming, because the failure mode of getting this wrong
 is a worker that dies in seven seconds saying "Credit balance is too low".

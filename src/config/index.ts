@@ -89,6 +89,13 @@ export interface Config {
     readonly urlTemplate?: string;
     readonly deployCommand?: string;
   };
+  /** What a worker may be, and how long it gets. */
+  readonly worker: {
+    /** A model alias or full name. The CLI's own default when unset. */
+    readonly model?: string;
+    /** A ceiling on every delegation, in minutes. Lowers, never raises. */
+    readonly maxMinutes?: number;
+  };
   /** Who may approve a production deploy. Empty means nobody can. */
   readonly approvers: readonly string[];
   readonly repo: {
@@ -278,6 +285,14 @@ function toConfig(secrets: Secrets, project: ProjectConfig): Config {
         ? {}
         : { deployCommand: project.docs.deployCommand }),
     }),
+    worker: Object.freeze({
+      ...(project.worker.model === undefined
+        ? {}
+        : { model: project.worker.model }),
+      ...(project.worker.maxMinutes === undefined
+        ? {}
+        : { maxMinutes: project.worker.maxMinutes }),
+    }),
     approvers: Object.freeze([...project.approvers]),
     repo: Object.freeze({
       pathOrUrl: project.repo.pathOrUrl,
@@ -454,7 +469,18 @@ export function report(options: LoadOptions = {}): Report[] {
     add('repo.mainBranch', data.repo.mainBranch);
     add('repo.slug', data.repo.slug ?? slugFromRepo(data.repo.pathOrUrl));
     add('figma.fileKey', data.figma.fileKey);
+    add('figma.mcpUrl', data.figma.mcpUrl);
     add('npm.registry', data.npm.registry);
+    add(
+      'worker.model',
+      data.worker.model ?? "not pinned, so each worker takes the CLI's default",
+    );
+    add(
+      'worker.maxMinutes',
+      data.worker.maxMinutes === undefined
+        ? 'no ceiling, so each lane uses its own'
+        : `${data.worker.maxMinutes} minutes, lowering any lane longer than that`,
+    );
   }
 
   return rows;

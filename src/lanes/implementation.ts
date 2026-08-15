@@ -105,6 +105,29 @@ export function branchFor(component: ComponentRow): string {
   return `component/${slug === '' ? component.id.toLowerCase() : slug}`;
 }
 
+/**
+ * The model and the ceiling for one delegation.
+ *
+ * Every lane has a timeout sized to its own craft. A configured ceiling only
+ * ever lowers one, never raises it: somebody running on a subscription is
+ * protecting a window they share with the rest of their day, and a lane that
+ * quietly ran longer than they asked would be the opposite of that.
+ */
+export function workerLimits(
+  config: Config,
+  laneTimeoutMs: number,
+): { readonly model?: string; readonly timeoutMs: number } {
+  const cap = config.worker.maxMinutes;
+  const ceiling = cap === undefined ? laneTimeoutMs : cap * 60 * 1000;
+
+  return {
+    ...(config.worker.model === undefined
+      ? {}
+      : { model: config.worker.model }),
+    timeoutMs: Math.min(laneTimeoutMs, ceiling),
+  };
+}
+
 /** The Dev Mode server the Figma desktop app runs, on this machine. */
 export function isLocalMcp(url: string): boolean {
   return /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(url);
@@ -210,7 +233,7 @@ export function implementationDelegation(
     cwd: config.repo.pathOrUrl,
     allowedTools: IMPLEMENTATION_TOOLS,
     mcpConfig: figmaMcpConfig(config),
-    timeoutMs: IMPLEMENTATION_TIMEOUT_MS,
+    ...workerLimits(config, IMPLEMENTATION_TIMEOUT_MS),
     // The design source, and the visual test service. No Airtable, no npm.
     allowEnv: [
       'FIGMA_TOKEN',

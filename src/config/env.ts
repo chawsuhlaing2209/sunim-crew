@@ -68,6 +68,8 @@ export const OVERRIDES: Readonly<Record<string, string>> = {
   REPO_PRODUCTION_COMMAND: 'repo.productionCommand',
   REPO_PRODUCTION_URL_TEMPLATE: 'repo.productionUrlTemplate',
   NPM_PUBLISH_COMMAND: 'npm.publishCommand',
+  WORKER_MODEL: 'worker.model',
+  WORKER_MAX_MINUTES: 'worker.maxMinutes',
   DOCS_PATH: 'docs.path',
   DOCS_URL_TEMPLATE: 'docs.urlTemplate',
   DOCS_DEPLOY_COMMAND: 'docs.deployCommand',

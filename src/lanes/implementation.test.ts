@@ -5,6 +5,7 @@ import type { Config } from '../config/index.js';
 import { FORBIDDEN_IN_CHILD, childEnv } from '../runner/index.js';
 import type { DelegateOptions, DelegateResult } from '../runner/index.js';
 import {
+  IMPLEMENTATION_TIMEOUT_MS,
   IMPLEMENTATION_TOOLS,
   branchFor,
   briefPath,
@@ -13,6 +14,7 @@ import {
   implementationDelegation,
   isLocalMcp,
   runImplementation,
+  workerLimits,
 } from './index.js';
 import type { RunnerPort } from './index.js';
 import { readFile } from 'node:fs/promises';
@@ -161,6 +163,64 @@ describe('the Figma MCP config', () => {
     expect(isLocalMcp('https://mcp.figma.com/mcp')).toBe(false);
     // Not a hosted address that merely starts the same way.
     expect(isLocalMcp('https://localhost.evil.example.com/mcp')).toBe(false);
+  });
+});
+
+describe('what a worker is allowed to be', () => {
+  const student = (extra: Record<string, string>) =>
+    loadConfig({
+      env: {
+        GITHUB_TOKEN: 'x',
+        AIRTABLE_TOKEN: 'x',
+        ASANA_TOKEN: 'x',
+        FIGMA_TOKEN: 'x',
+        AIRTABLE_BASE_ID: 'appAAAAAAAAAAAAAA',
+        ASANA_WORKSPACE_ID: '1',
+        ASANA_PROJECT_ID: '2',
+        REPO_PATH_OR_URL: '/tmp/design-system',
+        ...extra,
+      },
+    });
+
+  it('leaves the model to the CLI unless somebody pins one', () => {
+    expect(
+      workerLimits(config, IMPLEMENTATION_TIMEOUT_MS).model,
+    ).toBeUndefined();
+    expect(
+      workerLimits(
+        student({ WORKER_MODEL: 'sonnet' }),
+        IMPLEMENTATION_TIMEOUT_MS,
+      ).model,
+    ).toBe('sonnet');
+  });
+
+  it('lowers a lane ceiling and never raises one', () => {
+    const capped = student({ WORKER_MAX_MINUTES: '20' });
+
+    // 45 minutes of engineer, cut to the 20 a person asked for.
+    expect(workerLimits(capped, IMPLEMENTATION_TIMEOUT_MS).timeoutMs).toBe(
+      20 * 60 * 1000,
+    );
+    // A lane already shorter than the cap keeps its own, smaller, number.
+    expect(workerLimits(capped, 5 * 60 * 1000).timeoutMs).toBe(5 * 60 * 1000);
+    // A cap longer than the lane does not extend it.
+    expect(
+      workerLimits(student({ WORKER_MAX_MINUTES: '120' }), 5 * 60 * 1000)
+        .timeoutMs,
+    ).toBe(5 * 60 * 1000);
+  });
+
+  it('reaches the worker, and not just the config', () => {
+    const options = implementationDelegation({
+      component: component(),
+      config: student({ WORKER_MODEL: 'sonnet', WORKER_MAX_MINUTES: '20' }),
+      designUrl: 'https://figma.com/design/abc/DS?node-id=1-2',
+      branch: 'component/button',
+      brief: '# Engineer',
+    });
+
+    expect(options.model).toBe('sonnet');
+    expect(options.timeoutMs).toBe(20 * 60 * 1000);
   });
 });
 

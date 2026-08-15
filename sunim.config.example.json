@@ -49,5 +49,10 @@
   },
   "npm": {
     "registry": "https://registry.npmjs.org"
-  }
+  },
+  "worker": {
+    "model": "",
+    "maxMinutes": ""
+  },
+  "approvers": [""]
 }

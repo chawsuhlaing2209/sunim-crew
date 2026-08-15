@@ -9,6 +9,7 @@ import {
   fileJournal,
   memoryJournal,
   repeatedTimeouts,
+  resetsAt,
   watch,
   willRepeat,
 } from './journal.js';
@@ -202,7 +203,38 @@ describe('a failure that will happen to everybody', () => {
     ).rejects.toThrow(/Not spawning anything else/);
 
     expect(runner.spawns).toBe(1);
-    expect(watched.halted).toContain('Credit balance is too low');
+    expect(watched.halted?.kind).toBe('needs-a-person');
+    expect(watched.halted?.reason).toContain('Credit balance is too low');
+  });
+
+  it('tells a limit that resets apart from a key that will not', async () => {
+    // A subscription runs out on a window, not a balance. Somebody sent
+    // looking for a broken key when their limit merely reset in an hour has
+    // been told the wrong thing about their own account.
+    const journal = memoryJournal();
+    const watched = watch(
+      runner([
+        brokeAt(
+          'exit 1, Claude usage limit reached. Your limit will reset at 6pm.',
+        ),
+      ]),
+      { journal, onLine: () => undefined },
+    );
+
+    await watched.delegate(options('Button-implementation', 'Engineer'));
+
+    expect(watched.halted?.kind).toBe('needs-time');
+    await expect(
+      watched.delegate(options('Card-implementation', 'Engineer')),
+    ).rejects.toThrow(/Run the sweep again after 6pm/);
+  });
+
+  it('reads the reset time out when the worker gave one', () => {
+    expect(resetsAt('usage limit reached, resets at 6pm')).toBe('6pm');
+    expect(resetsAt('Your limit will reset at 11:00am. Try then.')).toBe(
+      '11:00am',
+    );
+    expect(resetsAt('Credit balance is too low')).toBeUndefined();
   });
 
   it('keeps going after a failure that is only about this component', async () => {

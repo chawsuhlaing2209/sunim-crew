@@ -2,7 +2,7 @@ import type { ComponentRow } from '../airtable/index.js';
 import type { Config } from '../config/index.js';
 import type { DelegateOptions } from '../runner/index.js';
 import { readBrief } from './briefs.js';
-import { branchFor } from './implementation.js';
+import { branchFor, workerLimits } from './implementation.js';
 import type { BlockedReport, LaneRun, RunnerPort } from './implementation.js';
 
 /**
@@ -128,7 +128,7 @@ export function stageDelegation(
     task: stageTask(input),
     cwd: config.repo.pathOrUrl,
     allowedTools: STAGE_TOOLS,
-    timeoutMs: STAGE_TIMEOUT_MS,
+    ...workerLimits(config, STAGE_TIMEOUT_MS),
     // gh reads the operator's own login from their home directory, which is
     // already passed through. The crew stores nobody's GitHub password, and
     // this worker holds no publish key.

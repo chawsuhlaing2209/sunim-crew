@@ -191,6 +191,24 @@ export const projectSchema = z.object({
     })
     .prefault({}),
   /**
+   * What a worker is allowed to be and how long it gets.
+   *
+   * Mostly here for a subscription. A plan has a window rather than a
+   * balance, so the thing worth controlling is not price per token but how
+   * much of somebody's afternoon one delegation can take, and which model
+   * spends that window fastest.
+   */
+  worker: z
+    .object({
+      // A model alias, "sonnet" or "opus", or a full name. The CLI's own
+      // default when unset, which follows whatever the operator is on.
+      model: z.string().min(1).optional(),
+      // A ceiling on every delegation, in minutes. Each lane has its own,
+      // sized to its craft; this lowers any that are longer and raises none.
+      maxMinutes: z.coerce.number().int().positive().max(240).optional(),
+    })
+    .prefault({}),
+  /**
    * Who may approve a production deploy. An Asana user gid, or the name
    * Asana shows. Nobody listed means nothing can ever be approved, which is
    * the safe way round.
@@ -212,6 +230,7 @@ export const GROUP_KEYS = [
   'repo',
   'npm',
   'docs',
+  'worker',
 ] as const satisfies readonly (keyof ProjectConfig)[];
 
 /** Pull owner/repo out of a GitHub url. Returns undefined for a local path. */

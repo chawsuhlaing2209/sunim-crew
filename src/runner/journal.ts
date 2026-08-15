@@ -153,24 +153,69 @@ export function repeatedTimeouts(
 }
 
 /**
- * A failure that will happen again, identically, to every worker after this
- * one. Not enough credit, not signed in, a key that is not a key. None of it
- * is about the component being built, and none of it gets better by spawning
- * the next process.
+ * Nothing is wrong with the component, and nothing gets better by spawning
+ * the next worker. Not signed in, no credit, a key that is not a key.
  */
-const WILL_NOT_GET_BETTER =
+const NEEDS_A_PERSON =
   /credit balance|not logged in|please run \/login|invalid api key|authentication_error|unauthorized|401|403/i;
 
+/**
+ * The same, except time fixes it.
+ *
+ * A subscription has a window rather than a balance, so a student who runs
+ * out is not broken and has nothing to fix. Telling them their key is bad
+ * would send them looking for a problem that is not there, and telling them
+ * nothing would have them retry into the same wall all afternoon.
+ */
+const NEEDS_TIME =
+  /rate limit|usage limit|limit reached|limit will reset|quota|too many requests|429/i;
+
+export type HaltKind = 'needs-a-person' | 'needs-time';
+
+export interface Halt {
+  readonly kind: HaltKind;
+  readonly reason: string;
+}
+
+/** When the limit lifts, if the worker happened to say. */
+export function resetsAt(error: string): string | undefined {
+  return /reset[s]?\s+at\s+([^.,;]+)/i.exec(error)?.[1]?.trim();
+}
+
+export function haltFor(error: string | undefined): Halt | undefined {
+  if (error === undefined) return undefined;
+  if (NEEDS_TIME.test(error)) return { kind: 'needs-time', reason: error };
+  if (NEEDS_A_PERSON.test(error)) {
+    return { kind: 'needs-a-person', reason: error };
+  }
+  return undefined;
+}
+
+/** Kept for callers that only want to know whether to stop. */
 export function willRepeat(error: string | undefined): boolean {
-  return error !== undefined && WILL_NOT_GET_BETTER.test(error);
+  return haltFor(error) !== undefined;
 }
 
 export class HaltedError extends Error {
-  constructor(reason: string) {
+  readonly kind: HaltKind;
+
+  constructor(halt: Halt) {
+    const when = resetsAt(halt.reason);
+
     super(
-      `Not spawning anything else: ${reason}. Every worker after the first would fail the same way, so the rest of this sweep is skipped rather than run up.`,
+      halt.kind === 'needs-time'
+        ? [
+            `Stopping here: ${halt.reason}.`,
+            when === undefined
+              ? 'Nothing is broken and there is nothing to fix. Run the sweep again once your limit has reset.'
+              : `Nothing is broken and there is nothing to fix. Run the sweep again after ${when}.`,
+            'Everything already verified stays written, so the next run picks up where this one stopped.',
+          ].join(' ')
+        : `Not spawning anything else: ${halt.reason}. Every worker after this one would fail the same way, so the rest of this sweep is skipped rather than run up.`,
     );
+
     this.name = 'HaltedError';
+    this.kind = halt.kind;
   }
 }
 
@@ -186,7 +231,7 @@ export type WatchedRunner = Delegator & {
   /** Agents that timed out repeatedly during or before this run. */
   readonly flags: readonly TimeoutFlag[];
   /** Why nothing more will be spawned this sweep, once something has stopped it. */
-  readonly halted: string | undefined;
+  readonly halted: Halt | undefined;
 };
 
 /**
@@ -209,7 +254,7 @@ export function watch(runner: Delegator, deps: WatchDeps): WatchedRunner {
   const now = deps.now ?? (() => new Date());
   const line = deps.onLine ?? ((text: string) => console.log(text));
   const strikes = deps.strikes ?? TIMEOUT_STRIKES;
-  let halted: string | undefined;
+  let halted: Halt | undefined;
 
   return {
     flags,
@@ -247,9 +292,10 @@ export function watch(runner: Delegator, deps: WatchDeps): WatchedRunner {
         }
       }
 
-      if (!result.ok && willRepeat(result.error)) {
-        halted = result.error ?? 'a worker could not start';
-        line(new HaltedError(halted).message);
+      const halt = result.ok ? undefined : haltFor(result.error);
+      if (halt !== undefined) {
+        halted = halt;
+        line(new HaltedError(halt).message);
       }
 
       return result;
