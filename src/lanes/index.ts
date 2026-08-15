@@ -32,6 +32,18 @@ export {
 export type { StageDeps, StageResult, StageTaskInput } from './stage.js';
 
 export {
+  DOCS_TIMEOUT_MS,
+  DOCS_TOOLS,
+  docsDelegation,
+  docsPageFor,
+  docsSlug,
+  docsTask,
+  docsUrlFor,
+  runDocs,
+} from './docs.js';
+export type { DocsDeps, DocsTaskInput } from './docs.js';
+
+export {
   FIX_TIMEOUT_MS,
   FIX_TOOLS,
   fixDelegation,
