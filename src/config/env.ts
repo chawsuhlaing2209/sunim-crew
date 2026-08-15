@@ -7,7 +7,15 @@ import { AGENT_KEYS, FIELD_KEYS, TABLE_KEYS } from './schema.js';
  * with their own keys.
  */
 export const secretsSchema = z.object({
-  ANTHROPIC_API_KEY: z.string().min(1, 'must not be empty'),
+  /**
+   * Optional, and the presence of it is a choice about who pays.
+   *
+   * Set, and every worker spends metered API credit against this key. Unset,
+   * and a worker inherits the Claude Code sign-in of whoever runs the sweep,
+   * which is a subscription rather than a balance. Neither is more correct.
+   * Leaving it out is the cheaper one, and it keeps a key off the machine.
+   */
+  ANTHROPIC_API_KEY: z.string().min(1, 'must not be empty').optional(),
   GITHUB_TOKEN: z.string().min(1, 'must not be empty'),
   AIRTABLE_TOKEN: z.string().min(1, 'must not be empty'),
   ASANA_TOKEN: z.string().min(1, 'must not be empty'),
@@ -28,6 +36,7 @@ export const PUBLISH_SECRET_KEYS: readonly SecretKey[] = ['NPM_TOKEN'];
 
 /** Secrets a step may run without, until the step that needs them. */
 export const OPTIONAL_SECRET_KEYS: readonly SecretKey[] = [
+  'ANTHROPIC_API_KEY',
   'CHROMATIC_TOKEN',
   'NPM_TOKEN',
 ];

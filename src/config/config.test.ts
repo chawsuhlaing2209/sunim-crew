@@ -145,6 +145,28 @@ describe('loadConfig', () => {
     expect(config.npm.registry).toBe('https://registry.npmjs.org');
   });
 
+  it('runs with no Anthropic key, so workers use their own sign-in', () => {
+    // A Claude subscription and API credit are two different meters. Handing
+    // a worker a key puts it on the metered one, whatever the operator is
+    // signed in to, so leaving the key out has to be a supported choice.
+    const { ANTHROPIC_API_KEY: _omitted, ...rest } = secrets;
+    const config = loadConfig({ env: rest, project });
+
+    expect(config.anthropic.apiKey).toBeUndefined();
+    expect(config.github.token).toBe('test-github-token');
+  });
+
+  it('says which one a worker will spend', () => {
+    const { ANTHROPIC_API_KEY: _omitted, ...rest } = secrets;
+    const on = (rows: ReturnType<typeof report>) =>
+      rows.find((row) => row.name === 'workers run on')?.detail ?? '';
+
+    expect(on(report({ env: secrets, project }))).toContain(
+      'ANTHROPIC_API_KEY',
+    );
+    expect(on(report({ env: rest, project }))).toContain('subscription');
+  });
+
   it('names a missing secret, and never a value', () => {
     const { AIRTABLE_TOKEN: _omitted, ...rest } = secrets;
 

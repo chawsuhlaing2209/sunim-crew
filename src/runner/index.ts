@@ -11,6 +11,7 @@ export {
 export type { DelegateDeps, SpawnFn } from './delegate.js';
 
 export {
+  HaltedError,
   TIMEOUT_STRIKES,
   agentOf,
   describeDelegation,
@@ -19,6 +20,7 @@ export {
   memoryJournal,
   repeatedTimeouts,
   watch,
+  willRepeat,
 } from './journal.js';
 export type {
   Delegator,

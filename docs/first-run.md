@@ -20,6 +20,34 @@ Three things only a person can do, and the run stops at each until they do:
 2. Merge the component's pull request into staging.
 3. Approve the production deploy.
 
+## 0. Decide who pays for the workers
+
+A Claude subscription and Anthropic API credit are two separate meters. Max
+does not top up API credit, and an API key never draws on Max.
+
+Whichever one a worker uses is decided by one thing: whether
+`ANTHROPIC_API_KEY` is in the environment when the sweep runs.
+
+- **Set**: every worker spends metered API credit against that key.
+- **Not set**: every worker runs on the Claude Code sign-in of whoever runs
+  the sweep, which is their subscription.
+
+To use a subscription, take `ANTHROPIC_API_KEY` out of `.env` entirely, and
+sign the CLI in once:
+
+```bash
+claude
+/login
+```
+
+`npm run config:check` prints which of the two it will be, in as many words.
+Check it rather than assuming, because the failure mode of getting this wrong
+is a worker that dies in seven seconds saying "Credit balance is too low".
+
+If the first worker of a sweep fails that way, or because nobody is signed
+in, the sweep stops spawning for the rest of the run. One broken key does not
+become one failed task per component.
+
 ## Before anything
 
 - Claude Code signed in on this machine. The crew spawns it as a subprocess.

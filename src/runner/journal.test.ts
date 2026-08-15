@@ -10,6 +10,7 @@ import {
   memoryJournal,
   repeatedTimeouts,
   watch,
+  willRepeat,
 } from './journal.js';
 import type { DelegationRecord, Delegator } from './journal.js';
 import type { DelegateOptions, DelegateResult } from './types.js';
@@ -150,6 +151,74 @@ describe('a journal on disk', () => {
     const journal = fileJournal(join(await tempDir(), 'nothing.jsonl'));
 
     expect(await journal.all()).toEqual([]);
+  });
+});
+
+describe('a failure that will happen to everybody', () => {
+  const brokeAt = (error: string): Partial<DelegateResult> => ({
+    ok: false,
+    error,
+    result: undefined,
+  });
+
+  it('knows the difference between no credit and a bad component', () => {
+    expect(willRepeat('exit 1, Credit balance is too low')).toBe(true);
+    expect(willRepeat('exit 1, Not logged in · Please run /login')).toBe(true);
+    expect(willRepeat('exit 1, invalid api key')).toBe(true);
+    // The ordinary kind. The next worker may well do fine.
+    expect(willRepeat('exit 1, the component would not build')).toBe(false);
+    expect(willRepeat('timed out after 2700000ms')).toBe(false);
+    expect(willRepeat(undefined)).toBe(false);
+  });
+
+  it('spawns nothing after the first one, rather than once per component', async () => {
+    const journal = memoryJournal();
+    const runner = {
+      spawns: 0,
+      delegate(options: DelegateOptions) {
+        this.spawns += 1;
+        return Promise.resolve({
+          label: options.label,
+          ok: false,
+          exitCode: 1,
+          signal: null,
+          timedOut: false,
+          durationMs: 4000,
+          promptPath: '/tmp/p.md',
+          logPath: '/tmp/p.log',
+          result: undefined,
+          structuredOutput: undefined,
+          sessionId: undefined,
+          costUsd: 0,
+          error: 'exit 1, Credit balance is too low',
+        } satisfies DelegateResult);
+      },
+    };
+    const watched = watch(runner, { journal, onLine: () => undefined });
+
+    await watched.delegate(options('Button-implementation', 'Engineer'));
+    await expect(
+      watched.delegate(options('Card-implementation', 'Engineer')),
+    ).rejects.toThrow(/Not spawning anything else/);
+
+    expect(runner.spawns).toBe(1);
+    expect(watched.halted).toContain('Credit balance is too low');
+  });
+
+  it('keeps going after a failure that is only about this component', async () => {
+    const journal = memoryJournal();
+    const watched = watch(
+      runner([brokeAt('exit 1, the component would not build'), {}]),
+      { journal, onLine: () => undefined },
+    );
+
+    await watched.delegate(options('Button-implementation', 'Engineer'));
+    const second = await watched.delegate(
+      options('Card-implementation', 'Engineer'),
+    );
+
+    expect(second.ok).toBe(true);
+    expect(watched.halted).toBeUndefined();
   });
 });
 

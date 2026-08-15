@@ -51,7 +51,11 @@ export type {
  * which the environment can override.
  */
 export interface Config {
-  readonly anthropic: { readonly apiKey: string };
+  /**
+   * Absent means workers run on the Claude Code sign-in of whoever runs the
+   * sweep, on a subscription, rather than on metered API credit.
+   */
+  readonly anthropic: { readonly apiKey?: string };
   readonly github: { readonly token: string };
   readonly airtable: {
     readonly token: string;
@@ -230,7 +234,11 @@ function toConfig(secrets: Secrets, project: ProjectConfig): Config {
   const slug = project.repo.slug ?? slugFromRepo(project.repo.pathOrUrl);
 
   return Object.freeze({
-    anthropic: Object.freeze({ apiKey: secrets.ANTHROPIC_API_KEY }),
+    anthropic: Object.freeze(
+      secrets.ANTHROPIC_API_KEY === undefined
+        ? {}
+        : { apiKey: secrets.ANTHROPIC_API_KEY },
+    ),
     github: Object.freeze({ token: secrets.GITHUB_TOKEN }),
     airtable: Object.freeze({
       token: secrets.AIRTABLE_TOKEN,
@@ -408,6 +416,18 @@ export function report(options: LoadOptions = {}): Report[] {
         found === undefined ? 'not set' : `set, ${found.length} characters`,
     });
   }
+
+  // Whether a worker spends credit or a subscription is decided by whether
+  // that key is there, so the doctor says which, rather than leaving somebody
+  // to work it out from a line that reads "not set".
+  rows.push({
+    name: 'workers run on',
+    state: 'set',
+    detail:
+      value(env, 'ANTHROPIC_API_KEY') === undefined
+        ? 'the Claude Code sign-in of whoever runs the sweep, on their subscription'
+        : 'ANTHROPIC_API_KEY, spending metered API credit',
+  });
 
   const project = projectSchema.safeParse(merge(options.project, env));
   if (project.success) {

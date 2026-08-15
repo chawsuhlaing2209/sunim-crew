@@ -152,6 +152,28 @@ export function repeatedTimeouts(
   return flags;
 }
 
+/**
+ * A failure that will happen again, identically, to every worker after this
+ * one. Not enough credit, not signed in, a key that is not a key. None of it
+ * is about the component being built, and none of it gets better by spawning
+ * the next process.
+ */
+const WILL_NOT_GET_BETTER =
+  /credit balance|not logged in|please run \/login|invalid api key|authentication_error|unauthorized|401|403/i;
+
+export function willRepeat(error: string | undefined): boolean {
+  return error !== undefined && WILL_NOT_GET_BETTER.test(error);
+}
+
+export class HaltedError extends Error {
+  constructor(reason: string) {
+    super(
+      `Not spawning anything else: ${reason}. Every worker after the first would fail the same way, so the rest of this sweep is skipped rather than run up.`,
+    );
+    this.name = 'HaltedError';
+  }
+}
+
 export interface WatchDeps {
   readonly journal: Journal;
   /** Where the per delegation line goes. Standard out, unless a test says so. */
@@ -163,25 +185,40 @@ export interface WatchDeps {
 export type WatchedRunner = Delegator & {
   /** Agents that timed out repeatedly during or before this run. */
   readonly flags: readonly TimeoutFlag[];
+  /** Why nothing more will be spawned this sweep, once something has stopped it. */
+  readonly halted: string | undefined;
 };
 
 /**
  * Wrap a runner so every delegation leaves a record behind.
  *
- * The wrapper does not stop an agent that keeps timing out. Deciding to stop
+ * Two different failures, treated two different ways.
+ *
+ * An agent that keeps timing out is flagged and still run. Deciding to stop
  * spending on it is a person's call, and a crew that quietly refuses to run a
- * stage looks exactly like a crew where nothing is wrong. So it flags it,
- * loudly, in the log and in the sweep's own report.
+ * stage looks exactly like a crew where nothing is wrong.
+ *
+ * A worker that could not authenticate or had no credit is different: that
+ * says nothing about the component, and the next worker will hit the same
+ * wall in the same seven seconds. So the first one of those stops the rest of
+ * the sweep spawning at all. It is loud, it names the reason, and it is the
+ * gate that stops one broken key becoming one failed task per component.
  */
 export function watch(runner: Delegator, deps: WatchDeps): WatchedRunner {
   const flags: TimeoutFlag[] = [];
   const now = deps.now ?? (() => new Date());
   const line = deps.onLine ?? ((text: string) => console.log(text));
   const strikes = deps.strikes ?? TIMEOUT_STRIKES;
+  let halted: string | undefined;
 
   return {
     flags,
+    get halted() {
+      return halted;
+    },
     async delegate(options) {
+      if (halted !== undefined) throw new HaltedError(halted);
+
       const result = await runner.delegate(options);
       const agent = agentOf(options);
 
@@ -208,6 +245,11 @@ export function watch(runner: Delegator, deps: WatchDeps): WatchedRunner {
           flags.push(flag);
           line(describeFlag(flag));
         }
+      }
+
+      if (!result.ok && willRepeat(result.error)) {
+        halted = result.error ?? 'a worker could not start';
+        line(new HaltedError(halted).message);
       }
 
       return result;

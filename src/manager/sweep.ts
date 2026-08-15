@@ -53,6 +53,29 @@ export interface SweepDeps {
   readonly releaseRun?: (component: ComponentRow) => Promise<ReleaseResult>;
 }
 
+/**
+ * Run a lane and turn a thrown error into a reported one.
+ *
+ * A lane that throws would otherwise take the whole sweep down with it, and
+ * every component already looked at would lose its outcome. The commonest
+ * cause is the runner refusing to spawn anything else, which is a thing to
+ * report on each component rather than a crash.
+ */
+async function safely(run: () => Promise<LaneRun>): Promise<LaneRun> {
+  try {
+    return await run();
+  } catch (error) {
+    return {
+      ok: false,
+      report: '',
+      note: error instanceof Error ? error.message : String(error),
+      logPath: undefined,
+      durationMs: 0,
+      costUsd: undefined,
+    };
+  }
+}
+
 const ROLE_TO_AGENT: Readonly<Record<AgentRole, AgentKey>> = {
   Engineer: 'engineer',
   QA: 'qa',
@@ -297,7 +320,7 @@ async function sweepOne(
     }
 
     // Run the craft. The worker reports; it writes nothing anywhere.
-    const run = await lane(component);
+    const run = await safely(() => lane(component));
 
     if (run.report.trim() !== '') {
       await deps.asana.reportOnSubtask(
@@ -416,7 +439,8 @@ async function sweepFixes(
       continue;
     }
 
-    const run = await deps.fixLane(component, row);
+    const fixLane = deps.fixLane;
+    const run = await safely(() => fixLane(component, row));
 
     if (run.report.trim() !== '') {
       await deps.asana.reportOnSubtask(
