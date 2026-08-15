@@ -200,6 +200,19 @@ export const projectSchema = z.object({
    */
   worker: z
     .object({
+      /**
+       * Which meter a worker spends.
+       *
+       * "subscription", the default, means a worker is given no API key at
+       * all and authenticates the way the person running the sweep does.
+       * "api-key" hands it ANTHROPIC_API_KEY and bills the console account.
+       *
+       * The default is the safe one, because the failure it prevents is
+       * silent: a key sitting in a .env or exported in a shell would
+       * otherwise put every worker on metered billing without anybody
+       * choosing it.
+       */
+      auth: z.enum(['subscription', 'api-key']).default('subscription'),
       // A model alias, "sonnet" or "opus", or a full name. The CLI's own
       // default when unset, which follows whatever the operator is on.
       model: z.string().min(1).optional(),

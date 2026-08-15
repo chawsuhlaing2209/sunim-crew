@@ -8,14 +8,31 @@ The north star is `docs/crew.md`. The spine that never bends: nobody writes the 
 
 ## Before you start
 
-- Node 20+, Claude Code signed in.
+- Node 20+, and **Claude Code signed in with your Claude account**. Run `claude`, then `/login`. That sign-in is what the workers run on.
 - The Airtable base duplicated into your account. Base id and token in config. Field ids are in `tools.md`.
 - An Asana workspace and token in config.
 - A GitHub repo for the design system, and a read-only GitHub token.
-- An Anthropic API key. Steps that spawn workers spend it.
-- Figma MCP, Chromatic, and an npm account for publishing, all in config.
+- Figma. The desktop app's Dev Mode MCP server, on this machine, needs no token. The hosted server refuses a personal access token, so the local one is the path.
+- Optional, and only for the person who ships: Chromatic, and an npm account for publishing.
+
+**No Anthropic API key is needed to build or run any of this.** A worker is a headless Claude Code process, and Claude Code is included in a Claude plan, so a worker runs on the sign-in of whoever started the sweep. A subscription and API credit are two separate meters, and neither tops up the other.
+
+The crew is built to make that the default rather than a thing you configure. No worker is handed `ANTHROPIC_API_KEY`, even when one is sitting in `.env` or exported in a shell, because a key that reaches a child by accident puts everybody onto metered billing without anybody choosing it. Somebody who does want the API says so once, with `WORKER_AUTH=api-key`.
 
 Everything is bring-your-own and config-driven. Nothing of yours is baked into the code.
+
+### If you are teaching this
+
+A student needs three things: a Claude sign-in, an Airtable token, an Asana token. Nothing else, and nothing that costs them money. They never hold the npm token or production access, because those sit behind the human gate and belong to whoever runs the course. Their GitHub token is read-only.
+
+Two settings are worth pinning for a class, in `.env`:
+
+```bash
+WORKER_MODEL=sonnet
+WORKER_MAX_MINUTES=20
+```
+
+A plan is a window rather than a balance, so what matters is not price per token but how much of an afternoon one delegation can take. See the Pro section of `docs/first-run.md`.
 
 ---
 
@@ -44,7 +61,7 @@ Later lanes, after the core runs end to end: Auditor, Advisor, Reporter (`docs/c
 
 ## Step 1 — Scaffold and config
 ```
-Read CLAUDE.md and tools.md first, including the Config surface section. Set up a TypeScript Node project called sunim-crew: Node 20+, strict, ESM. Install zod and the Airtable and Asana clients. Dev deps: vitest, prettier, eslint, husky, lint-staged with the Prettier settings in tools.md. Build one config surface, validated with zod, that holds everything project-specific from tools.md: the Airtable base id and token plus the table and field NAME map, the Asana token, workspace, and project id, the Figma token, the target repo path or url and its branch names, and the keys. Nothing project-specific is hardcoded. Ship a config example file with keys and names only, no secrets, and a .gitignore that covers the real config. No application logic yet. Explain the structure, then stop.
+Read CLAUDE.md and tools.md first, including the Config surface section. Set up a TypeScript Node project called sunim-crew: Node 20+, strict, ESM. Install zod and the Airtable and Asana clients. Dev deps: vitest, prettier, eslint, husky, lint-staged with the Prettier settings in tools.md. Build one config surface, validated with zod, that holds everything project-specific from tools.md: the Airtable base id and token plus the table and field NAME map, the Asana token, workspace, and project id, the Figma token, the target repo path or url and its branch names, and the secrets. Workers run on the operator's own Claude Code sign-in, so no Anthropic API key is required: make that key optional, and make the choice of meter explicit as worker.auth, defaulting to subscription. Nothing project-specific is hardcoded. Ship a config example file with keys and names only, no secrets, and a .gitignore that covers the real config. No application logic yet. Explain the structure, then stop.
 ```
 Done when: the project installs and config loads from the environment with nothing hardcoded.
 
@@ -68,11 +85,11 @@ Done when: you can create a component task with its subtasks and read a subtask'
 
 ## Step 5 — The runner and worker briefs
 ```
-Read tools.md. Build src/runner: delegate(opts) spawns Claude Code headless, one process per delegation. Read the current headless flags from the docs, do not guess. Write the composed prompt to disk before spawning. Stream stdout to a log. Hard timeout, kill the tree on timeout. The child gets no Airtable status access and no publish keys.
+Read tools.md. Build src/runner: delegate(opts) spawns Claude Code headless, one process per delegation. Read the current headless flags from the docs, do not guess. Write the composed prompt to disk before spawning. Stream stdout to a log. Hard timeout, kill the tree on timeout. Build the child's environment from an allowlist rather than inheriting the parent's: it gets no Airtable status access, no publish keys, and no Anthropic API key, so it authenticates through the sign-in of whoever started the sweep. A key sitting in a .env must not be able to put every worker onto metered billing without anybody choosing it.
 
 Add src/briefs/{engineer,qa,devops}.md. Each describes one craft and how to report its result back into its Asana subtask. No status talk, no writing evidence, no reading another component. Explain, then stop.
 ```
-Done when: a trivial brief returns a log and exit 0, and no worker path can write status or hold a publish key.
+Done when: a trivial brief returns a log and exit 0, no worker path can write status or hold a publish key, and a child spawned with a key in the parent environment does not receive it.
 
 ## Step 6 — The manager routine and the liar test
 ```
@@ -84,7 +101,7 @@ Done when: the liar test passes. A claim with no real evidence never moves the s
 
 ## Step 7 — Engineer lane, build to To be staged
 ```
-Read docs/crew.md and src/briefs/engineer.md. Wire the Implementation subtask. The engineer reads the Figma node from the Design column via the Figma MCP (get_design_context, get_variable_defs), builds the component into the design system repo on a branch, previews Storybook locally, runs vitest and Chromatic, commits, pushes, and reports the commit URL into its subtask. The manager verifies the commit resolves, writes Commit to Airtable. The formula moves the component to To be staged. Explain, then stop.
+Read docs/crew.md and src/briefs/engineer.md. Wire the Implementation subtask. The engineer reads the Figma node from the Design column via the Figma MCP (get_design_context, get_variable_defs), builds the component into the design system repo on a branch, previews Storybook locally, runs the tests, runs the visual check only if one is configured, commits, pushes, and reports the commit URL into its subtask. The manager verifies the commit resolves, writes Commit to Airtable. The formula moves the component to To be staged. Explain, then stop.
 ```
 Done when: a To-do component with a Figma link is built, committed, and lands at To be staged with a real commit.
 

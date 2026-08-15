@@ -82,8 +82,12 @@ export function childEnv(
   };
 
   for (const key of SYSTEM_PASSTHROUGH) take(key);
-  // The worker spends its own key. This is the one secret it always needs.
-  take('ANTHROPIC_API_KEY');
+  // ANTHROPIC_API_KEY is not special and is not passed by default. A child
+  // with no key authenticates the way the person running the sweep does,
+  // through their own Claude Code sign-in, and that is the point: a key left
+  // in a .env, or exported in somebody's shell, cannot quietly put a whole
+  // classroom onto metered billing. A caller that wants the key allows it by
+  // name, like anything else.
   for (const key of options.allow ?? []) take(key);
 
   for (const [key, value] of Object.entries(options.set ?? {})) {

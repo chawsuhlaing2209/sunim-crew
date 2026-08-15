@@ -51,15 +51,16 @@ That installs, builds, copies `.env.example` to `.env`, and prints exactly what 
 
 ### 1. Fill in `.env`
 
-Every name in it says where to get its value. Five are required to run at all:
+Every name in it says where to get its value. Four are required to run at all:
 
 | Name | Where |
 | --- | --- |
-| `ANTHROPIC_API_KEY` | console.anthropic.com, API keys |
 | `AIRTABLE_TOKEN` | airtable.com/create/tokens, scopes `data.records:read`, `data.records:write`, `schema.bases:read` |
 | `ASANA_TOKEN` | app.asana.com, Settings, Apps, personal access token |
 | `FIGMA_TOKEN` | figma.com, Settings, Security, personal access tokens |
 | `GITHUB_TOKEN` | Fine grained, **read only**, Contents: Read. It confirms a commit resolves and nothing else. |
+
+There is deliberately no Anthropic key in that list. A worker is a headless Claude Code process and runs on your own sign-in, so a Claude plan is enough and no worker is ever handed `ANTHROPIC_API_KEY`, even when one is set. To spend metered API credit instead, say so once with `WORKER_AUTH=api-key`.
 
 Secrets live in the environment and only there. Everything else, the base id, the table and field names, the workspace, the repo and its branches, can live in `.env` too or in `sunim.config.json`.
 

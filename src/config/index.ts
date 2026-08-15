@@ -91,6 +91,8 @@ export interface Config {
   };
   /** What a worker may be, and how long it gets. */
   readonly worker: {
+    /** Which meter a worker spends. Subscription unless somebody says otherwise. */
+    readonly auth: 'subscription' | 'api-key';
     /** A model alias or full name. The CLI's own default when unset. */
     readonly model?: string;
     /** A ceiling on every delegation, in minutes. Lowers, never raises. */
@@ -286,6 +288,7 @@ function toConfig(secrets: Secrets, project: ProjectConfig): Config {
         : { deployCommand: project.docs.deployCommand }),
     }),
     worker: Object.freeze({
+      auth: project.worker.auth,
       ...(project.worker.model === undefined
         ? {}
         : { model: project.worker.model }),
@@ -435,13 +438,20 @@ export function report(options: LoadOptions = {}): Report[] {
   // Whether a worker spends credit or a subscription is decided by whether
   // that key is there, so the doctor says which, rather than leaving somebody
   // to work it out from a line that reads "not set".
+  const chosen = value(env, 'WORKER_AUTH') ?? 'subscription';
+  const key = value(env, 'ANTHROPIC_API_KEY');
+
   rows.push({
     name: 'workers run on',
     state: 'set',
     detail:
-      value(env, 'ANTHROPIC_API_KEY') === undefined
-        ? 'the Claude Code sign-in of whoever runs the sweep, on their subscription'
-        : 'ANTHROPIC_API_KEY, spending metered API credit',
+      chosen === 'api-key'
+        ? key === undefined
+          ? 'ANTHROPIC_API_KEY, which is not set. Set it, or take WORKER_AUTH out.'
+          : 'ANTHROPIC_API_KEY, spending metered API credit'
+        : key === undefined
+          ? 'the Claude Code sign-in of whoever runs the sweep, on their subscription'
+          : 'the Claude Code sign-in of whoever runs the sweep. ANTHROPIC_API_KEY is set and is not passed to any worker.',
   });
 
   const project = projectSchema.safeParse(merge(options.project, env));

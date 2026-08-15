@@ -139,8 +139,9 @@ describe('the delegation', () => {
       { allow: options.allowEnv ?? [] },
     );
 
-    // Its own key to run on, and nothing else.
-    expect(env['ANTHROPIC_API_KEY']).toBe('anthropic');
+    // Nothing at all, the API key included: QA runs on the sign-in of
+    // whoever started the sweep.
+    expect(env['ANTHROPIC_API_KEY']).toBeUndefined();
     expect(env['FIGMA_TOKEN']).toBeUndefined();
     for (const key of FORBIDDEN_IN_CHILD) {
       expect(env[key]).toBeUndefined();

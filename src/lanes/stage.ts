@@ -2,7 +2,7 @@ import type { ComponentRow } from '../airtable/index.js';
 import type { Config } from '../config/index.js';
 import type { DelegateOptions } from '../runner/index.js';
 import { readBrief } from './briefs.js';
-import { branchFor, workerLimits } from './implementation.js';
+import { branchFor, workerEnv, workerLimits } from './implementation.js';
 import type { BlockedReport, LaneRun, RunnerPort } from './implementation.js';
 
 /**
@@ -132,7 +132,11 @@ export function stageDelegation(
     // gh reads the operator's own login from their home directory, which is
     // already passed through. The crew stores nobody's GitHub password, and
     // this worker holds no publish key.
-    allowEnv: ['GH_HOST', 'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL'],
+    allowEnv: workerEnv(config, [
+      'GH_HOST',
+      'GIT_AUTHOR_NAME',
+      'GIT_AUTHOR_EMAIL',
+    ]),
     ...(runDir === undefined ? {} : { runDir }),
   };
 }

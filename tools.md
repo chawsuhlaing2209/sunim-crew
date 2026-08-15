@@ -9,7 +9,7 @@ Sunim Crew. An installable agentic crew that takes a component from Figma to a p
 | Layer | Pick |
 |---|---|
 | Language | TypeScript strict, ESM |
-| Runner | Claude Code headless, one process per delegation |
+| Runner | Claude Code headless, one process per delegation, on the operator's own sign-in |
 | Validation | zod |
 | Tests | vitest (unit), Chromatic (visual), Storybook (states) |
 | Registry | npm, the published component library |
@@ -85,7 +85,11 @@ repo:
   slug                # owner/repo, used to confirm a commit resolves
 npm:
   registry            # defaults to the public npm registry
-keys: anthropic, github (read-only), chromatic, npm
+worker:
+  auth                # subscription, the default, or api-key
+  model               # what every worker runs as. The CLI default when unset.
+  maxMinutes          # a ceiling on any delegation. Lowers a lane, never raises it.
+keys: github (read-only), airtable, asana, figma. Optional: anthropic (only with worker.auth=api-key), chromatic, npm (the gated publish step alone).
 ```
 
 The crew resolves the names in `tables` and `fields` to the base's ids at startup, so a person who duplicates your base template changes only `baseId` and `token`. A person with a different base edits the name map. The client checks the base has every expected field on startup and reports what is missing. An example config file holds keys and names only, no secrets.

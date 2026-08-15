@@ -128,6 +128,24 @@ export function workerLimits(
   };
 }
 
+/**
+ * What a worker carries, plus the API key only if somebody asked for it.
+ *
+ * Every lane builds its environment through here, so one place decides which
+ * meter a worker spends and no lane can quietly disagree with the others. On
+ * subscription, which is the default, the key is simply not in the list, so a
+ * key sitting in a .env or exported in somebody's shell never reaches a child
+ * and cannot put a whole class onto metered billing by accident.
+ */
+export function workerEnv(
+  config: Config,
+  names: readonly string[],
+): readonly string[] {
+  return config.worker.auth === 'api-key'
+    ? ['ANTHROPIC_API_KEY', ...names]
+    : names;
+}
+
 /** The Dev Mode server the Figma desktop app runs, on this machine. */
 export function isLocalMcp(url: string): boolean {
   return /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(url);
@@ -235,12 +253,12 @@ export function implementationDelegation(
     mcpConfig: figmaMcpConfig(config),
     ...workerLimits(config, IMPLEMENTATION_TIMEOUT_MS),
     // The design source, and the visual test service. No Airtable, no npm.
-    allowEnv: [
+    allowEnv: workerEnv(config, [
       'FIGMA_TOKEN',
       'CHROMATIC_TOKEN',
       'GIT_AUTHOR_NAME',
       'GIT_AUTHOR_EMAIL',
-    ],
+    ]),
     ...(runDir === undefined ? {} : { runDir }),
   };
 }

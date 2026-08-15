@@ -5,7 +5,7 @@ import type { ComponentRow, NewTestRow } from '../airtable/index.js';
 import type { Config } from '../config/index.js';
 import type { DelegateOptions } from '../runner/index.js';
 import { readBrief } from './briefs.js';
-import { workerLimits } from './implementation.js';
+import { workerEnv, workerLimits } from './implementation.js';
 import type { LaneRun, RunnerPort } from './implementation.js';
 
 /**
@@ -161,7 +161,7 @@ export function qaDelegation(
     addDirs: [resultsDir],
     allowedTools: QA_TOOLS,
     ...workerLimits(config, QA_TIMEOUT_MS),
-    allowEnv: [],
+    allowEnv: workerEnv(config, []),
     ...(runDir === undefined ? {} : { runDir }),
   };
 }

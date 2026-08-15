@@ -25,19 +25,23 @@ Three things only a person can do, and the run stops at each until they do:
 A Claude subscription and Anthropic API credit are two separate meters. Max
 does not top up API credit, and an API key never draws on Max.
 
-Whichever one a worker uses is decided by one thing: whether
-`ANTHROPIC_API_KEY` is in the environment when the sweep runs.
+The crew runs on a subscription unless somebody says otherwise, and that is
+not a thing you have to remember to set up. No worker is handed
+`ANTHROPIC_API_KEY`, even when one is sitting in `.env` or exported in a
+shell, because a key that reaches a child by accident puts everybody onto
+metered billing without anybody choosing it.
 
-- **Set**: every worker spends metered API credit against that key.
-- **Not set**: every worker runs on the Claude Code sign-in of whoever runs
-  the sweep, which is their subscription.
-
-To use a subscription, take `ANTHROPIC_API_KEY` out of `.env` entirely, and
-sign the CLI in once:
+So all a person needs is to sign the CLI in once:
 
 ```bash
 claude
 /login
+```
+
+To spend metered API credit instead, say so on purpose:
+
+```bash
+WORKER_AUTH=api-key
 ```
 
 ### On a Pro plan

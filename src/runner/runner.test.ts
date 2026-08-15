@@ -111,10 +111,13 @@ describe('the child environment', () => {
     FIGMA_TOKEN: 'figma-token',
   };
 
-  it('gives a worker its own key and nothing else it was not offered', () => {
+  it('gives a worker nothing it was not offered, the API key included', () => {
     const env = childEnv(parent);
 
-    expect(env['ANTHROPIC_API_KEY']).toBe('anthropic-key');
+    // No key means the child authenticates the way the person running the
+    // sweep does, through their own sign-in. A key left in a .env or
+    // exported in a shell must not decide that for them.
+    expect(env['ANTHROPIC_API_KEY']).toBeUndefined();
     expect(env['PATH']).toBe('/usr/bin');
     expect(env['ASANA_TOKEN']).toBeUndefined();
     expect(env['FIGMA_TOKEN']).toBeUndefined();
@@ -126,6 +129,13 @@ describe('the child environment', () => {
     for (const key of FORBIDDEN_IN_CHILD) {
       expect(env[key]).toBeUndefined();
     }
+  });
+
+  it('passes the API key when, and only when, a caller allows it', () => {
+    expect(childEnv(parent)['ANTHROPIC_API_KEY']).toBeUndefined();
+    expect(
+      childEnv(parent, { allow: ['ANTHROPIC_API_KEY'] })['ANTHROPIC_API_KEY'],
+    ).toBe('anthropic-key');
   });
 
   it('passes through what a worker was explicitly given', () => {
@@ -351,7 +361,7 @@ describe('delegate', () => {
     await run;
 
     const env = fake.calls[0]?.options.env ?? {};
-    expect(env['ANTHROPIC_API_KEY']).toBe('anthropic-key');
+    expect(env['ANTHROPIC_API_KEY']).toBeUndefined();
     expect(env['ASANA_TOKEN']).toBe('asana-token');
     expect(env['AIRTABLE_TOKEN']).toBeUndefined();
     expect(env['NPM_TOKEN']).toBeUndefined();

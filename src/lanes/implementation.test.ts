@@ -210,6 +210,57 @@ describe('what a worker is allowed to be', () => {
     ).toBe(5 * 60 * 1000);
   });
 
+  it('hands a worker no API key, even when one is sitting right there', () => {
+    // The whole point. A key in a .env, or exported in somebody's shell,
+    // must not be able to put a class onto metered billing by accident.
+    const withKeyLyingAround = student({ ANTHROPIC_API_KEY: 'sk-ant-real' });
+    const options = implementationDelegation({
+      component: component(),
+      config: withKeyLyingAround,
+      designUrl: 'https://figma.com/design/abc/DS?node-id=1-2',
+      branch: 'component/button',
+      brief: '# Engineer',
+    });
+
+    expect(withKeyLyingAround.worker.auth).toBe('subscription');
+    expect(options.allowEnv).not.toContain('ANTHROPIC_API_KEY');
+
+    const env = childEnv(
+      {
+        PATH: '/usr/bin',
+        HOME: '/home/student',
+        ANTHROPIC_API_KEY: 'sk-ant-real',
+      },
+      { allow: options.allowEnv ?? [] },
+    );
+
+    expect(env['ANTHROPIC_API_KEY']).toBeUndefined();
+    // HOME still goes through, which is how the child finds the sign-in.
+    expect(env['HOME']).toBe('/home/student');
+  });
+
+  it('hands it over when somebody chose the API on purpose', () => {
+    const paying = student({
+      ANTHROPIC_API_KEY: 'sk-ant-real',
+      WORKER_AUTH: 'api-key',
+    });
+    const options = implementationDelegation({
+      component: component(),
+      config: paying,
+      designUrl: 'https://figma.com/design/abc/DS?node-id=1-2',
+      branch: 'component/button',
+      brief: '# Engineer',
+    });
+
+    expect(options.allowEnv).toContain('ANTHROPIC_API_KEY');
+    expect(
+      childEnv(
+        { PATH: '/usr/bin', ANTHROPIC_API_KEY: 'sk-ant-real' },
+        { allow: options.allowEnv ?? [] },
+      )['ANTHROPIC_API_KEY'],
+    ).toBe('sk-ant-real');
+  });
+
   it('reaches the worker, and not just the config', () => {
     const options = implementationDelegation({
       component: component(),
