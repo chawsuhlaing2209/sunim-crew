@@ -73,7 +73,20 @@ export interface Config {
     readonly mcpUrl: string;
   };
   readonly chromatic: { readonly projectToken?: string };
-  readonly npm: { readonly token?: string; readonly registry: string };
+  readonly npm: {
+    readonly token?: string;
+    readonly registry: string;
+    readonly publishCommand: string;
+  };
+  readonly docs: {
+    /** Where a component page is written. */
+    readonly path?: string;
+    /** Where that page appears once the site is built. {slug} is the slug. */
+    readonly urlTemplate?: string;
+    readonly deployCommand?: string;
+  };
+  /** Who may approve a production deploy. Empty means nobody can. */
+  readonly approvers: readonly string[];
   readonly repo: {
     readonly pathOrUrl: string;
     readonly stagingBranch: string;
@@ -81,6 +94,10 @@ export interface Config {
     readonly slug?: string;
     /** The one command that puts a branch on staging, when the repo has one. */
     readonly stageCommand?: string;
+    /** How production is deployed. Held by the gated step alone. */
+    readonly productionCommand?: string;
+    /** Where a component lives in production. {slug} is the component slug. */
+    readonly productionUrlTemplate?: string;
   };
 }
 
@@ -227,8 +244,19 @@ function toConfig(secrets: Secrets, project: ProjectConfig): Config {
     ),
     npm: Object.freeze({
       registry: project.npm.registry,
+      publishCommand: project.npm.publishCommand,
       ...(secrets.NPM_TOKEN === undefined ? {} : { token: secrets.NPM_TOKEN }),
     }),
+    docs: Object.freeze({
+      ...(project.docs.path === undefined ? {} : { path: project.docs.path }),
+      ...(project.docs.urlTemplate === undefined
+        ? {}
+        : { urlTemplate: project.docs.urlTemplate }),
+      ...(project.docs.deployCommand === undefined
+        ? {}
+        : { deployCommand: project.docs.deployCommand }),
+    }),
+    approvers: Object.freeze([...project.approvers]),
     repo: Object.freeze({
       pathOrUrl: project.repo.pathOrUrl,
       stagingBranch: project.repo.stagingBranch,
@@ -237,6 +265,12 @@ function toConfig(secrets: Secrets, project: ProjectConfig): Config {
       ...(project.repo.stageCommand === undefined
         ? {}
         : { stageCommand: project.repo.stageCommand }),
+      ...(project.repo.productionCommand === undefined
+        ? {}
+        : { productionCommand: project.repo.productionCommand }),
+      ...(project.repo.productionUrlTemplate === undefined
+        ? {}
+        : { productionUrlTemplate: project.repo.productionUrlTemplate }),
     }),
   });
 }

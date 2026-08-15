@@ -55,6 +55,11 @@ export interface AsanaClient {
   assignSubtask(subtaskGid: string, assignee: string): Promise<Subtask>;
   isSubtaskDone(subtaskGid: string): Promise<boolean>;
   readResult(subtaskGid: string): Promise<AgentReport | undefined>;
+  /**
+   * Every comment on a subtask, with who wrote it. The gate needs the author,
+   * because an approval is only an approval when a named person made it.
+   */
+  listComments(subtaskGid: string): Promise<AgentReport[]>;
   /** The worker side of the pair: report, then mark done. */
   reportOnSubtask(subtaskGid: string, text: string): Promise<void>;
   completeSubtask(subtaskGid: string): Promise<Subtask>;
@@ -276,6 +281,19 @@ export function createAsanaClient(
             authorName: undefined,
             createdAt: undefined,
           };
+    },
+
+    async listComments(subtaskGid) {
+      const stories = await gateway.listStories(subtaskGid);
+      return stories
+        .filter((story) => story.resource_subtype === 'comment_added')
+        .map((story) => ({
+          text: story.text,
+          source: 'comment' as const,
+          authorGid: story.created_by?.gid,
+          authorName: story.created_by?.name,
+          createdAt: story.created_at,
+        }));
     },
 
     async reportOnSubtask(subtaskGid, text) {

@@ -7,6 +7,8 @@ import { MANAGER_MARKER, airtableRowUrl } from '../asana/index.js';
 import type { AgentRole, AsanaClient, Stage, Subtask } from '../asana/index.js';
 import type { AgentKey, Config } from '../config/index.js';
 import type { LaneRun, PreparedCase } from '../lanes/index.js';
+import { readApproval } from '../gate/index.js';
+import type { ReleaseResult } from '../release/index.js';
 import { isInconclusive } from '../verify/index.js';
 import type { Evidence, Result } from '../verify/index.js';
 import { actionFor } from './plan.js';
@@ -43,6 +45,12 @@ export interface SweepDeps {
   readonly lanes?: Partial<Record<Exclude<Stage, 'Fix'>, Lane>>;
   /** Runs one failed case. Separate, because Fix fans out over rows. */
   readonly fixLane?: FixLane;
+  /**
+   * Deploy production and publish, after a person has approved. Runs in this
+   * process, not in a worker: the checklist says only the gated step holds
+   * the publish keys, and a spawned worker would have to be given them.
+   */
+  readonly releaseRun?: (component: ComponentRow) => Promise<ReleaseResult>;
 }
 
 const ROLE_TO_AGENT: Readonly<Record<AgentRole, AgentKey>> = {
@@ -64,6 +72,8 @@ const KINDS: readonly OutcomeKind[] = [
   'unreported',
   'unfinished',
   'blocked',
+  'awaiting-approval',
+  'released',
   'deferred',
   'idle',
 ];
@@ -114,7 +124,7 @@ async function sweepOne(
     evidence: undefined,
   } as const;
 
-  const action = actionFor(component.status);
+  const action = actionFor(component);
 
   if (action === undefined) {
     return {
@@ -180,6 +190,87 @@ async function sweepOne(
     taskGid: task.gid,
     subtaskGid: subtask.gid,
   } as const;
+
+  // The human gate. Nothing below this line runs until a named person has
+  // approved this exact commit.
+  if (action.gated === true && !subtask.completed) {
+    const verdict = await readApproval(component, subtask.gid, {
+      asana: deps.asana,
+      approvers: deps.config.approvers,
+    });
+
+    if (!verdict.approved) {
+      return {
+        ...shared,
+        kind: 'awaiting-approval',
+        note: `not deploying: ${verdict.reason}`,
+      };
+    }
+
+    if (deps.releaseRun === undefined) {
+      return {
+        ...shared,
+        kind: 'awaiting-approval',
+        note: `${verdict.reason}, but no release is wired into this sweep`,
+      };
+    }
+
+    const shipped = await deps.releaseRun(component);
+
+    await deps.asana.reportOnSubtask(
+      subtask.gid,
+      [
+        `${MANAGER_MARKER}, release`,
+        '',
+        `Approved by ${verdict.approval.by} for ${verdict.approval.commit}.`,
+        ...shipped.steps.map(
+          (step) =>
+            `${step.name}: ${step.ok ? 'ok' : 'failed'} (${step.command})`,
+        ),
+        shipped.productionUrl === undefined
+          ? 'No production URL.'
+          : `Production: ${shipped.productionUrl}`,
+        shipped.npmUrl === undefined
+          ? 'No npm link.'
+          : `npm: ${shipped.npmUrl}`,
+      ].join('\n'),
+    );
+
+    if (!shipped.ok) {
+      return {
+        ...shared,
+        kind: 'unfinished',
+        note: `${verdict.reason}, but ${shipped.error ?? 'the release failed'}`,
+      };
+    }
+
+    // Verified like anything else: the URL has to answer before it is
+    // written, approval or no approval.
+    const claim = shipped.productionUrl;
+    if (claim === undefined) {
+      return {
+        ...shared,
+        kind: 'unreported',
+        note: 'released, but no production URL came back, so nothing was written',
+      };
+    }
+
+    const lives = await deps.verify.linkLives(claim);
+    if (!lives.ok) {
+      return await refuse(action, subtask, shared, lives, deps, claim);
+    }
+
+    await deps.airtable.writeEvidence(component.id, { productionUrl: claim });
+    await deps.asana.completeSubtask(subtask.gid);
+
+    return {
+      ...shared,
+      kind: 'released',
+      wrote: 'productionUrl',
+      evidence: lives.evidence,
+      note: `${verdict.reason}, deployed and published. Wrote productionUrl: ${lives.evidence.summary}`,
+    };
+  }
 
   let current = subtask;
 
@@ -483,6 +574,13 @@ async function check(
   await deps.airtable.writeEvidence(component.id, {
     [evidence.field]: claim,
   });
+
+  if (action.signOff !== undefined) {
+    await deps.asana.reportOnSubtask(
+      subtask.gid,
+      [MANAGER_MARKER, '', action.signOff].join('\n'),
+    );
+  }
 
   return {
     ...shared,

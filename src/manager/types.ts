@@ -21,6 +21,10 @@ export type OutcomeKind =
   | 'unfinished'
   /** A worker stopped because the component is broken. A Fix subtask is open. */
   | 'blocked'
+  /** Ready to ship, waiting for a person. Nothing runs until they say so. */
+  | 'awaiting-approval'
+  /** Approved, deployed and published. */
+  | 'released'
   /** This status is handled by a step that is not built yet. */
   | 'deferred'
   /** Nothing for the crew to do. */
@@ -98,6 +102,14 @@ export interface StageAction {
    * before the lane is asked to do anything.
    */
   readonly retest?: boolean;
+  /** Nothing happens here until a named person has approved it. */
+  readonly gated?: boolean;
+  /**
+   * Posted on the subtask when this stage's evidence is written. For a stage
+   * where the machine check is not the whole story and a person still has to
+   * look, which the log should say out loud rather than imply.
+   */
+  readonly signOff?: string;
   /** Set when a later step owns this status. */
   readonly deferredTo?: string;
 }

@@ -17,6 +17,8 @@ export {
 } from './sweep.js';
 export { extractCommitUrl, extractLink, urlsIn } from './extract.js';
 export type { FixLane, Lane, SweepDeps } from './sweep.js';
+export * from '../gate/index.js';
+export { release } from '../release/index.js';
 export type {
   ComponentOutcome,
   OutcomeKind,

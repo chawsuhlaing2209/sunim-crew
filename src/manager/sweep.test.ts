@@ -11,6 +11,8 @@ import type { AsanaClient, FixIssue, Subtask } from '../asana/index.js';
 import { loadConfig } from '../config/index.js';
 import type { Config } from '../config/index.js';
 import { fail, inconclusive, pass } from '../verify/index.js';
+import { renderApproval } from '../gate/index.js';
+import type { ReleaseResult } from '../release/index.js';
 import { describeSweep, recordCases, sweep } from './index.js';
 import type { VerifyPort } from './index.js';
 
@@ -162,6 +164,8 @@ interface AsanaState {
   assignee: string | undefined;
   report: string;
   fixes: { issue: FixIssue; assignee: string | undefined }[];
+  /** Approvals a person left on the Deploy subtask. */
+  approvals: { text: string; author: string }[];
 }
 
 function fakeAsana(
@@ -173,6 +177,7 @@ function fakeAsana(
     assignee: subtask.assignee?.gid,
     report: '',
     fixes: [],
+    approvals: [],
   };
 
   const current = (): Subtask => ({
@@ -214,6 +219,16 @@ function fakeAsana(
         return Promise.resolve(current());
       },
     ),
+    listComments: () =>
+      Promise.resolve(
+        state.approvals.map((entry) => ({
+          text: entry.text,
+          source: 'comment' as const,
+          authorGid: `gid-${entry.author}`,
+          authorName: entry.author,
+          createdAt: '2026-08-15T10:00:00.000Z',
+        })),
+      ),
     readResult: () =>
       Promise.resolve(
         state.report === ''
@@ -279,6 +294,23 @@ function workerReported(
 
 const REAL_COMMIT =
   'https://github.com/owner/design-system/commit/abc1234def5678901234567890abcdef12345678';
+
+/** The same config, with one person allowed to approve a release. */
+const approverConfig: Config = loadConfig({
+  env: {
+    ANTHROPIC_API_KEY: 'x',
+    GITHUB_TOKEN: 'x',
+    AIRTABLE_TOKEN: 'x',
+    ASANA_TOKEN: 'x',
+    FIGMA_TOKEN: 'x',
+    AIRTABLE_BASE_ID: 'appAAAAAAAAAAAAAA',
+    ASANA_WORKSPACE_ID: '1',
+    ASANA_PROJECT_ID: '2',
+    REPO_PATH_OR_URL: '/tmp/design-system',
+    ASANA_AGENT_DEVOPS: 'devops@example.com',
+  },
+  project: { approvers: ['Chaw Su'] },
+});
 
 /** The Button row, for a test that calls into the manager directly. */
 function component(): ComponentRow {
@@ -1113,6 +1145,330 @@ describe('the fix loop', () => {
   });
 });
 
+describe('the human gate', () => {
+  const ready = {
+    figma: 'https://figma.com/file/abc',
+    commit: REAL_COMMIT,
+    storybook: 'https://staging.example.com/sb/',
+  };
+
+  const passedRows: TestRow[] = [
+    {
+      id: 'r1',
+      name: 'Button, primary, md, hover',
+      result: 'Passed',
+      resultRaw: 'Passed',
+      expected: undefined,
+      suggestion: undefined,
+      componentIds: ['recButton'],
+      attachments: [{ id: 'a', url: 'https://x/s.png', filename: 's.png' }],
+    },
+  ];
+
+  const approved = (
+    asana: ReturnType<typeof fakeAsana>,
+    commit = REAL_COMMIT,
+  ) => {
+    asana.state.approvals.push({
+      text: renderApproval('Button', commit),
+      author: 'Chaw Su',
+    });
+  };
+
+  const releaseRun = (over: Partial<ReleaseResult> = {}) =>
+    vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        steps: [
+          { name: 'production', command: 'deploy', ok: true, output: '' },
+          { name: 'publish', command: 'npm publish', ok: true, output: '' },
+        ],
+        productionUrl: 'https://ds.example.com/components/button',
+        npmUrl: 'https://www.npmjs.com/package/@sunim/ds/v/1.2.0',
+        error: undefined,
+        ...over,
+      } satisfies ReleaseResult),
+    );
+
+  it('ships nothing until a person approves', async () => {
+    const airtable = fakeAirtable(ready, passedRows);
+    const asana = fakeAsana({ name: 'Deploy', stage: 'Deploy' });
+    const run = releaseRun();
+
+    const report = await sweep({
+      config: approverConfig,
+      airtable,
+      asana,
+      verify: port(),
+      releaseRun: run,
+    });
+
+    expect(report.outcomes[0]?.status).toBe('To be deployed');
+    expect(report.outcomes[0]?.kind).toBe('awaiting-approval');
+    expect(report.outcomes[0]?.note).toContain('waiting for a person');
+    expect(run).not.toHaveBeenCalled();
+    expect(airtable.writeEvidence).not.toHaveBeenCalled();
+  });
+
+  it('ships nothing on an approval from somebody who may not approve', async () => {
+    const airtable = fakeAirtable(ready, passedRows);
+    const asana = fakeAsana({ name: 'Deploy', stage: 'Deploy' });
+    asana.state.approvals.push({
+      text: renderApproval('Button', REAL_COMMIT),
+      author: 'Passing Stranger',
+    });
+    const run = releaseRun();
+
+    const report = await sweep({
+      config: approverConfig,
+      airtable,
+      asana,
+      verify: port(),
+      releaseRun: run,
+    });
+
+    expect(report.outcomes[0]?.note).toContain('not a named approver');
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('ships nothing on an approval for code that has since changed', async () => {
+    const airtable = fakeAirtable(ready, passedRows);
+    const asana = fakeAsana({ name: 'Deploy', stage: 'Deploy' });
+    approved(asana, 'https://github.com/owner/design-system/commit/older00');
+    const run = releaseRun();
+
+    const report = await sweep({
+      config: approverConfig,
+      airtable,
+      asana,
+      verify: port(),
+      releaseRun: run,
+    });
+
+    expect(report.outcomes[0]?.note).toContain('has lapsed');
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('deploys, publishes and writes the production URL once approved', async () => {
+    const airtable = fakeAirtable(ready, passedRows);
+    const asana = fakeAsana({ name: 'Deploy', stage: 'Deploy' });
+    approved(asana);
+    const run = releaseRun();
+
+    const report = await sweep({
+      config: approverConfig,
+      airtable,
+      asana,
+      verify: port(),
+      releaseRun: run,
+    });
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(report.outcomes[0]?.kind).toBe('released');
+    expect(airtable.writeEvidence).toHaveBeenCalledWith('recButton', {
+      productionUrl: 'https://ds.example.com/components/button',
+    });
+    // The npm link is on the record in Asana, for a person reading back.
+    expect(asana.state.comments.join('\n')).toContain('npmjs.com/package');
+  });
+
+  it('writes nothing when the production URL does not answer', async () => {
+    const airtable = fakeAirtable(ready, passedRows);
+    const asana = fakeAsana({ name: 'Deploy', stage: 'Deploy' });
+    approved(asana);
+
+    const report = await sweep({
+      config: approverConfig,
+      airtable,
+      asana,
+      verify: port({
+        linkLives: () => Promise.resolve(fail('link returns 502, not 200')),
+      }),
+      releaseRun: releaseRun(),
+    });
+
+    expect(airtable.writeEvidence).not.toHaveBeenCalled();
+    expect(report.counts.flagged).toBe(1);
+  });
+
+  it('writes nothing when the release itself failed', async () => {
+    const airtable = fakeAirtable(ready, passedRows);
+    const asana = fakeAsana({ name: 'Deploy', stage: 'Deploy' });
+    approved(asana);
+
+    const report = await sweep({
+      config: approverConfig,
+      airtable,
+      asana,
+      verify: port(),
+      releaseRun: releaseRun({
+        ok: false,
+        error: 'production deployed, but the publish failed',
+      }),
+    });
+
+    expect(report.outcomes[0]?.kind).toBe('unfinished');
+    expect(airtable.writeEvidence).not.toHaveBeenCalled();
+  });
+
+  it('approves nothing when nobody is a named approver', async () => {
+    const airtable = fakeAirtable(ready, passedRows);
+    const asana = fakeAsana({ name: 'Deploy', stage: 'Deploy' });
+    approved(asana);
+    const run = releaseRun();
+
+    // The default config in this file lists no approvers.
+    const report = await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port(),
+      releaseRun: run,
+    });
+
+    expect(report.outcomes[0]?.note).toContain(
+      'nobody is listed as an approver',
+    );
+    expect(run).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Document lane', () => {
+  const shipped = {
+    figma: 'https://figma.com/file/abc',
+    commit: REAL_COMMIT,
+    storybook: 'https://staging.example.com/sb/',
+    productionUrl: 'https://ds.example.com/components/button',
+  };
+
+  const passedRows: TestRow[] = [
+    {
+      id: 'r1',
+      name: 'Button, primary, md, hover',
+      result: 'Passed',
+      resultRaw: 'Passed',
+      expected: undefined,
+      suggestion: undefined,
+      componentIds: ['recButton'],
+      attachments: [{ id: 'a', url: 'https://x/s.png', filename: 's.png' }],
+    },
+  ];
+
+  const wrote = (url = 'https://docs.example.com/components/button') => ({
+    ok: true,
+    report: `Wrote all eight sections. ${url}`,
+    note: 'wrote the page',
+    logPath: undefined,
+    durationMs: 1,
+    costUsd: undefined,
+  });
+
+  it('goes to Document once a component is in production, not back to Deploy', async () => {
+    const airtable = fakeAirtable(shipped, passedRows);
+    const asana = fakeAsana({ name: 'Document', stage: 'Document' });
+
+    const report = await sweep({ config, airtable, asana, verify: port() });
+
+    // The formula still reads To be deployed, because Completed needs both.
+    expect(report.outcomes[0]?.status).toBe('To be deployed');
+    expect(report.outcomes[0]?.stage).toBe('Document');
+  });
+
+  it('writes Astro Link once the page resolves with every section', async () => {
+    const airtable = fakeAirtable(shipped, passedRows);
+    const asana = fakeAsana({ name: 'Document', stage: 'Document' });
+
+    const report = await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port(),
+      lanes: { Document: () => Promise.resolve(wrote()) },
+    });
+
+    expect(airtable.writeEvidence).toHaveBeenCalledWith('recButton', {
+      astro: 'https://docs.example.com/components/button',
+    });
+    expect(report.outcomes[0]?.kind).toBe('verified');
+    // Production URL and Astro Link both present, so the formula finishes it.
+    expect((await airtable.listComponents())[0]?.status).toBe('Completed');
+  });
+
+  it('says out loud that a person still has to read it', async () => {
+    const airtable = fakeAirtable(shipped, passedRows);
+    const asana = fakeAsana({ name: 'Document', stage: 'Document' });
+
+    await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port(),
+      lanes: { Document: () => Promise.resolve(wrote()) },
+    });
+
+    const signOff = asana.state.comments.find((text) =>
+      text.includes('Somebody still has to read it'),
+    );
+    expect(signOff).toBeDefined();
+    expect(signOff).toContain('That is all this check can tell you');
+  });
+
+  it('writes nothing when the page is missing a section', async () => {
+    const airtable = fakeAirtable(shipped, passedRows);
+    const asana = fakeAsana({ name: 'Document', stage: 'Document' });
+
+    const report = await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port({
+        docsPageComplete: () =>
+          Promise.resolve(
+            fail('docs page is missing 2: Accessibility, Changelog'),
+          ),
+      }),
+      lanes: { Document: () => Promise.resolve(wrote()) },
+    });
+
+    expect(airtable.writeEvidence).not.toHaveBeenCalled();
+    expect(report.counts.flagged).toBe(1);
+    expect(report.flagged[0]?.note).toContain('Accessibility');
+    expect((await airtable.listComponents())[0]?.status).toBe('To be deployed');
+  });
+
+  it('writes nothing when the writer reported no page URL', async () => {
+    const airtable = fakeAirtable(shipped, passedRows);
+    const asana = fakeAsana({ name: 'Document', stage: 'Document' });
+
+    const report = await sweep({
+      config,
+      airtable,
+      asana,
+      verify: port(),
+      lanes: {
+        Document: () =>
+          Promise.resolve({ ...wrote(), report: 'All done, it looks lovely.' }),
+      },
+    });
+
+    expect(airtable.writeEvidence).not.toHaveBeenCalled();
+    expect(report.outcomes[0]?.kind).toBe('unreported');
+  });
+
+  it('leaves a completed component alone once the page is recorded', async () => {
+    const airtable = fakeAirtable(
+      { ...shipped, astro: 'https://docs.example.com/components/button' },
+      passedRows,
+    );
+    const asana = fakeAsana();
+
+    const report = await sweep({ config, airtable, asana, verify: port() });
+
+    expect(report.outcomes[0]?.status).toBe('Completed');
+    expect(report.outcomes[0]?.kind).toBe('idle');
+  });
+});
+
 describe('sweep', () => {
   it('opens the right subtask for the status, assigned to the right role', async () => {
     const airtable = fakeAirtable();
@@ -1189,34 +1545,43 @@ describe('sweep', () => {
     expect(asana.state.completed).toBe(false);
   });
 
-  it('says which later step owns a status it does not handle yet', async () => {
-    const airtable = fakeAirtable(
-      {
-        figma: 'https://figma.com/file/abc',
-        commit: REAL_COMMIT,
-        storybook: 'https://staging.example.com/storybook/',
-      },
-      [
-        {
-          id: 'r1',
-          name: 'Button, primary, hover',
-          result: 'Passed',
-          resultRaw: 'Passed',
-          expected: undefined,
-          suggestion: undefined,
-          componentIds: ['recButton'],
-          attachments: [],
-        },
-      ],
-    );
+  it('reports a status it does not recognise, and acts on nothing', async () => {
+    const airtable = fakeAirtable({ figma: 'https://figma.com/file/abc' });
+    // A base whose formula grew a stage this version has never heard of.
+    const unknown = {
+      ...airtable,
+      listComponents: () =>
+        Promise.resolve([
+          {
+            id: 'recButton',
+            name: 'Button',
+            status: undefined,
+            statusRaw: 'Awaiting legal',
+            figma: 'https://figma.com/file/abc',
+            design: undefined,
+            commit: undefined,
+            storybook: undefined,
+            stagingUrl: undefined,
+            productionUrl: undefined,
+            astro: undefined,
+            totalTests: undefined,
+            passedTests: undefined,
+            synchronization: undefined,
+          },
+        ]),
+    } as unknown as AirtableClient;
     const asana = fakeAsana();
 
-    const report = await sweep({ config, airtable, asana, verify: port() });
+    const report = await sweep({
+      config,
+      airtable: unknown,
+      asana,
+      verify: port(),
+    });
 
-    // To be fixed is handled now. To be deployed is what waits for a person.
-    expect(report.outcomes[0]?.status).toBe('To be deployed');
     expect(report.outcomes[0]?.kind).toBe('deferred');
-    expect(report.outcomes[0]?.note).toContain('step 11');
+    expect(report.outcomes[0]?.note).toContain('Awaiting legal');
+    expect(asana.ensureSubtask).not.toHaveBeenCalled();
   });
 
   it('leaves a completed component alone', async () => {

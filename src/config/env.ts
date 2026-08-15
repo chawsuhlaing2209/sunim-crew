@@ -56,6 +56,12 @@ export const OVERRIDES: Readonly<Record<string, string>> = {
   REPO_STAGING_BRANCH: 'repo.stagingBranch',
   REPO_MAIN_BRANCH: 'repo.mainBranch',
   REPO_STAGE_COMMAND: 'repo.stageCommand',
+  REPO_PRODUCTION_COMMAND: 'repo.productionCommand',
+  REPO_PRODUCTION_URL_TEMPLATE: 'repo.productionUrlTemplate',
+  NPM_PUBLISH_COMMAND: 'npm.publishCommand',
+  DOCS_PATH: 'docs.path',
+  DOCS_URL_TEMPLATE: 'docs.urlTemplate',
+  DOCS_DEPLOY_COMMAND: 'docs.deployCommand',
   GITHUB_REPO: 'repo.slug',
   NPM_REGISTRY: 'npm.registry',
   ...Object.fromEntries(

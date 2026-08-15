@@ -159,6 +159,13 @@ export const projectSchema = z.object({
     // repo's own scripts and CI config to find the path, and says so if the
     // repo has none.
     stageCommand: z.string().min(1).optional(),
+    // How this repo deploys production. Run by the gated step, never by a
+    // worker. With no command, nothing can be deployed, which is the safe
+    // way round for a value nobody has set yet.
+    productionCommand: z.string().min(1).optional(),
+    // Where a component lives in production. {slug} is the component slug.
+    // Left unset, the production URL is read out of the deploy output.
+    productionUrlTemplate: z.string().min(1).optional(),
   }),
   npm: z
     .object({
@@ -166,16 +173,46 @@ export const projectSchema = z.object({
         .string()
         .regex(/^https?:\/\/\S+$/, 'must be an http or https url')
         .default(DEFAULTS.NPM_REGISTRY),
+      publishCommand: name('npm publish'),
     })
     .prefault({}),
+  /** The Astro Starlight site the component pages live in. */
+  docs: z
+    .object({
+      // Where a component page is written, absolute or relative to the repo.
+      path: z.string().min(1).optional(),
+      // Where that page appears once the site is built. {slug} is the slug.
+      urlTemplate: z
+        .string()
+        .regex(/^https?:\/\/\S+$/, 'must be an http or https url')
+        .optional(),
+      // How the docs site is built and published, when it has its own path.
+      deployCommand: z.string().min(1).optional(),
+    })
+    .prefault({}),
+  /**
+   * Who may approve a production deploy. An Asana user gid, or the name
+   * Asana shows. Nobody listed means nothing can ever be approved, which is
+   * the safe way round.
+   */
+  approvers: z.array(z.string().min(1)).prefault([]),
 });
 
 export type ProjectConfig = z.infer<typeof projectSchema>;
 
-/** The top level groups. Seeded before parsing so errors name the leaf. */
-export const GROUP_KEYS = Object.keys(
-  projectSchema.shape,
-) as (keyof ProjectConfig)[];
+/**
+ * The top level groups, seeded before parsing so a missing value is reported
+ * at its leaf. Listed rather than derived, because approvers is a list and
+ * seeding it with an object would break it.
+ */
+export const GROUP_KEYS = [
+  'airtable',
+  'asana',
+  'figma',
+  'repo',
+  'npm',
+  'docs',
+] as const satisfies readonly (keyof ProjectConfig)[];
 
 /** Pull owner/repo out of a GitHub url. Returns undefined for a local path. */
 export function slugFromRepo(pathOrUrl: string): string | undefined {
