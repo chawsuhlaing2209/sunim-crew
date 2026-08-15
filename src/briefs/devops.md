@@ -19,13 +19,23 @@ Write one comment on your Asana subtask, then mark it done. Plain text, holding:
 - Whether you resolved a conflict, and which files.
 - The build duration, and any warnings worth a second look.
 
+End with exactly one of these lines, on its own:
+
+```
+Result: staged
+Result: blocked by the component
+Result: blocked by the pipeline
+```
+
+A person reads that as a sentence and the crew reads it as an answer, so write one of the three exactly. Anything else and nobody can tell what happened without reading your whole report.
+
 Somebody opens your link and checks it answers before anything moves. A link that is not live yet is not a link. Wait for the deploy to finish, then check it, then report it.
 
 ## When it will not build
 
-If the failure is this component's fault, a type error in it, a missing token, a broken import, do not fix it. Report what broke, with the error text and the file, and say plainly that it belongs to the component. Somebody opens a fix task for the person who built it.
+If the failure is this component's fault, a type error in it, a missing token, a broken import, do not fix it. Report what broke, with the error text and the file, and end with `Result: blocked by the component`. Somebody opens a fix task for the person who built it, carrying what you wrote, so write enough for them to act on without asking you.
 
-If the failure is the pipeline's fault, a flaky dependency, an expired cache, a runner that died, retry once. If it fails the same way twice, report it and stop.
+If the failure is the pipeline's fault, a flaky dependency, an expired cache, a runner that died, retry once. If it fails the same way twice, end with `Result: blocked by the pipeline` and stop. Nobody gets a fix task for that, and it is tried again next time round.
 
 ## Bounds
 
