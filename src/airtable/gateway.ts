@@ -1,4 +1,5 @@
 import Airtable from 'airtable';
+import { AirtableRequestError } from './errors.js';
 
 /** What a cell may hold on the way in. Reads come back as unknown. */
 export type CellValue =
@@ -20,8 +21,24 @@ export interface SelectOptions {
  * The record layer. One small seam: the real one talks to Airtable, tests
  * hand the client a fake and never touch the network.
  */
+export interface UploadedAttachment {
+  readonly filename: string;
+  readonly contentType: string;
+  /** base64, and no more than 5MB once encoded. */
+  readonly file: string;
+}
+
 export interface RecordGateway {
   select(tableId: string, options?: SelectOptions): Promise<RecordRow[]>;
+  /**
+   * Put a file on a record's attachment field. Airtable takes the bytes
+   * directly, so a screenshot never has to be hosted anywhere public first.
+   */
+  uploadAttachment(
+    recordId: string,
+    fieldId: string,
+    attachment: UploadedAttachment,
+  ): Promise<void>;
   create(
     tableId: string,
     records: readonly { fields: Cells }[],
@@ -43,10 +60,37 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-export function airtableGateway(token: string, baseId: string): RecordGateway {
+export function airtableGateway(
+  token: string,
+  baseId: string,
+  fetchImpl: typeof fetch = fetch,
+): RecordGateway {
   const base = new Airtable({ apiKey: token }).base(baseId);
 
   return {
+    async uploadAttachment(recordId, fieldId, attachment) {
+      // airtable.js has no method for this endpoint, so it is a plain call.
+      const response = await fetchImpl(
+        `https://content.airtable.com/v0/${baseId}/${recordId}/${fieldId}/uploadAttachment`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(attachment),
+        },
+      );
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new AirtableRequestError(
+          response.status,
+          `Could not attach ${attachment.filename} to ${recordId}: ${response.status} ${detail.slice(0, 200)}`,
+        );
+      }
+    },
+
     async select(tableId, options = {}) {
       const records = await base(tableId)
         .select({
