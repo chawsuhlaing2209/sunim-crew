@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-export type BriefName = 'engineer' | 'qa' | 'devops';
+export type BriefName = 'engineer' | 'qa' | 'devops' | 'fix';
 
 /**
  * The briefs ship beside the code, and the build copies them into dist, so
