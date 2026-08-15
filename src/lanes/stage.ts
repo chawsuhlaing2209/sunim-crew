@@ -123,6 +123,7 @@ export function stageDelegation(
 
   return {
     label: `${component.name}-stage`,
+    agent: 'DevOps',
     brief,
     task: stageTask(input),
     cwd: config.repo.pathOrUrl,

@@ -643,7 +643,7 @@ function managerNote(note: string): string {
 /** A short, readable account of one sweep, for a log or a person. */
 export function describeSweep(report: SweepReport): string {
   const lines = [
-    `${report.outcomes.length} components: ${KINDS.filter(
+    `${report.outcomes.length} ${report.outcomes.length === 1 ? 'component' : 'components'}: ${KINDS.filter(
       (kind) => report.counts[kind] > 0,
     )
       .map((kind) => `${report.counts[kind]} ${kind}`)

@@ -23,7 +23,7 @@ The Airtable Development field is a formula. It reads the evidence and computes 
 
 A worker does the craft and reports. The manager goes and checks the claim, and writes the evidence field only if it holds up. The formula reacts. So a worker can say anything it likes, and only what survives the check moves anything.
 
-That is the whole design. Everything below is plumbing for it.
+That is the whole design. Everything below is plumbing for it. The build fails if any code writes that field: `npm run check:status` scans the source for it, and CI runs that first, on its own, so a failure is unmistakable.
 
 ## What each worker cannot do
 
@@ -84,15 +84,33 @@ npm run airtable:check   # resolves your base, read only
 
 ### 4. First sweep
 
+Read what it would do before it does anything:
+
+```bash
+npm run sweep -- --dry-run
+```
+
+That composes every task and every worker prompt, and writes nothing. No Airtable field, no Asana comment, no deploy, no publish, no worker. It prints the list of things a real sweep would have done, in order, so you can read them before any of them happen.
+
+Then, when it looks right:
+
 ```bash
 npm run sweep
 ```
 
-It reads the board, opens and assigns the subtask each component needs, and checks any evidence already reported. It spawns nobody and spends nothing.
+One pass, then stop. It reads the board, opens and assigns the subtask each component's status calls for, runs the workers, and checks every claim before writing any evidence.
 
-## Running the workers
+`npm run sweep -- --no-workers` does the same without spawning anybody: subtasks opened and assigned, evidence checked, nothing spent. That is what a first run on a fresh base wants.
 
-The sweep above does no craft. Wiring the lanes in, so the crew builds, stages, tests, fixes and documents by itself, is a deliberate step: it spawns Claude Code processes and spends your key. See `src/manager/sweep-cli.ts` for where the lanes attach.
+Every delegation leaves a line in `logs/delegations.jsonl`: who, how long, what it cost, how it ended. An agent that times out twice in a row is flagged by name in the sweep output, because the third attempt will spend the same time and money to find that out again.
+
+## The daily routine
+
+```bash
+npm run schedule
+```
+
+Prints the crontab entry, which you add yourself. One entry, on one machine. The sweep is the only thing that writes evidence, and two of them running is two writers racing over one board, so a sweep that starts while another is still going stops and says who holds the lock.
 
 ## Shipping
 

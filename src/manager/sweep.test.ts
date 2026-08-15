@@ -1618,7 +1618,7 @@ describe('sweep', () => {
       await sweep({ config, airtable, asana, verify: port() }),
     );
 
-    expect(text).toContain('1 components');
+    expect(text).toContain('1 component: 1 assigned');
     expect(text).toContain('Button');
   });
 });

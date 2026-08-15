@@ -174,6 +174,7 @@ export function implementationDelegation(
 
   return {
     label: `${component.name}-implementation`,
+    agent: 'Engineer',
     brief,
     task: implementationTask(input),
     cwd: config.repo.pathOrUrl,

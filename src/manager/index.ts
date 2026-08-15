@@ -1,13 +1,3 @@
-import type { AirtableClient } from '../airtable/index.js';
-import type { Config } from '../config/index.js';
-import {
-  commitResolves,
-  docsPageComplete,
-  linkLives,
-  testRowsReal,
-} from '../verify/index.js';
-import type { VerifyPort } from './types.js';
-
 export { PLAN, actionFor } from './plan.js';
 export {
   FIX_DETAIL_LIMIT,
@@ -17,6 +7,27 @@ export {
 } from './sweep.js';
 export { extractCommitUrl, extractLink, urlsIn } from './extract.js';
 export type { FixLane, Lane, SweepDeps } from './sweep.js';
+export { crew } from './crew.js';
+export type { Crew, CrewOptions } from './crew.js';
+export {
+  describeDryRun,
+  dryAirtable,
+  dryAsana,
+  dryLog,
+  dryRelease,
+  dryRun,
+  dryRunner,
+} from './dry-run.js';
+export type { ComposedPrompt, DryRunLog, MutableDryRunLog } from './dry-run.js';
+export {
+  LOCK_FILE,
+  LOCK_STALE_MS,
+  SWEEP_SCHEDULE,
+  crontabLine,
+  withSingleWriter,
+} from './schedule.js';
+export type { LockDeps, Locked } from './schedule.js';
+export { verifyPort } from './port.js';
 export * from '../gate/index.js';
 export { release } from '../release/index.js';
 export type {
@@ -27,19 +38,3 @@ export type {
   SweepReport,
   VerifyPort,
 } from './types.js';
-
-/**
- * The real checks, wired to the GitHub token and the base. Handed to sweep()
- * as one object so a test can pass a different one and never touch a network.
- */
-export function verifyPort(
-  config: Config,
-  airtable: AirtableClient,
-): VerifyPort {
-  return {
-    commitResolves: (url) => commitResolves(url, config.github.token),
-    linkLives: (url) => linkLives(url),
-    testRowsReal: (componentId) => testRowsReal(componentId, airtable),
-    docsPageComplete: (url) => docsPageComplete(url),
-  };
-}

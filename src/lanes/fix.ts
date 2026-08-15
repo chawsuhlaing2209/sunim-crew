@@ -88,6 +88,7 @@ export function fixDelegation(
 
   return {
     label: `${component.name}-fix-${issue.caseName}`,
+    agent: 'Engineer',
     brief,
     task: fixTask(input),
     cwd: config.repo.pathOrUrl,

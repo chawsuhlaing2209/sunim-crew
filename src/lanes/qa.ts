@@ -152,6 +152,7 @@ export function qaDelegation(
 
   return {
     label: `${component.name}-test`,
+    agent: 'QA',
     brief,
     task: qaTask(input),
     cwd: config.repo.pathOrUrl,

@@ -26,6 +26,8 @@
     "airtable:check": "npm run build && node --env-file-if-exists=.env dist/airtable/check.js",
     "approve": "npm run build && node --env-file-if-exists=.env dist/gate/approve.js",
     "sweep": "npm run build && node --env-file-if-exists=.env dist/manager/sweep-cli.js",
+    "schedule": "npm run build && node dist/manager/schedule-cli.js",
+    "check:status": "vitest run src/airtable/no-status-writes.test.ts",
     "base:create": "npm run build && node --env-file-if-exists=.env dist/airtable/create-base.js",
     "setup": "bash scripts/setup.sh",
     "prepare": "husky"

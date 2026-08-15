@@ -112,6 +112,7 @@ export function docsDelegation(
 
   return {
     label: `${component.name}-document`,
+    agent: 'Writer',
     brief,
     task: docsTask(input),
     cwd: config.repo.pathOrUrl,
