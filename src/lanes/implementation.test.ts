@@ -207,6 +207,42 @@ describe('the delegation', () => {
     expect(env['NPM_TOKEN']).toBeUndefined();
   });
 
+  it('asks for no visual check when no service is configured', () => {
+    // A worker told to run a command whose credential nobody set fails at
+    // that step every single time, and says nothing about the component.
+    expect(options.task).not.toContain('npx chromatic');
+    expect(options.task).toContain('No visual test service is configured');
+    // The numbering closes up rather than skipping a step.
+    expect(options.task).toContain(`5. Commit on component/button`);
+  });
+
+  it('asks for it again the moment a token is set, with no code change', () => {
+    const withVisual = implementationDelegation({
+      component: component(),
+      config: loadConfig({
+        env: {
+          ANTHROPIC_API_KEY: 'x',
+          GITHUB_TOKEN: 'x',
+          AIRTABLE_TOKEN: 'x',
+          ASANA_TOKEN: 'x',
+          FIGMA_TOKEN: 'x',
+          AIRTABLE_BASE_ID: 'appAAAAAAAAAAAAAA',
+          ASANA_WORKSPACE_ID: '1',
+          ASANA_PROJECT_ID: '2',
+          REPO_PATH_OR_URL: '/tmp/design-system',
+          CHROMATIC_TOKEN: 'a-real-project-token',
+        },
+      }),
+      designUrl: 'https://figma.com/design/abc/DS?node-id=1-2',
+      branch: 'component/button',
+      brief: '# Engineer',
+    });
+
+    expect(withVisual.task).toContain('5. npx chromatic');
+    expect(withVisual.task).toContain('6. Commit on component/button');
+    expect(withVisual.task).not.toContain('No visual test service');
+  });
+
   it('tells the engineer the commit has to be pushed to count', () => {
     expect(options.task).toContain('commit you did not push will not count');
   });

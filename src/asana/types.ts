@@ -44,7 +44,7 @@ export const STAGE_ROLE: Readonly<Record<Stage, AgentRole>> = {
  */
 export const STAGE_DONE_WHEN: Readonly<Record<Stage, string>> = {
   Implementation:
-    'Component built, Storybook previewed, vitest and Chromatic pass, commit pushed. Report the commit URL here.',
+    'Component built, Storybook previewed, tests pass, commit pushed. Report the commit URL here.',
   Stage:
     'Deployed to staging, staging Storybook link ready. Report the staging link here.',
   Test: 'Every state and prop tested, one row written per case with a screenshot. Report what you wrote here.',

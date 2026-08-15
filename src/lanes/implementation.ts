@@ -133,6 +133,23 @@ export interface TaskTextInput {
 export function implementationTask(input: TaskTextInput): string {
   const { component, config, designUrl, branch } = input;
 
+  // The visual check is asked for only when a service is configured to run it
+  // against. A worker told to run a command whose credential nobody set fails
+  // at that step every time, and that failure says nothing about the
+  // component. Setting the token is what turns the step back on.
+  const visualCheck = config.chromatic.projectToken !== undefined;
+
+  const steps = [
+    'Build the component and its stories, every variant, size and state.',
+    'Write the contract file beside the component, with every field\n   docs/component-contract.md lists.',
+    `${IMPLEMENTATION_COMMANDS.storybook}, and confirm this component's\n   stories are in the built output before you go on.`,
+    `${IMPLEMENTATION_COMMANDS.test}. Every test passes.`,
+    ...(visualCheck
+      ? [`${IMPLEMENTATION_COMMANDS.chromatic}, for the visual check.`]
+      : []),
+    `Commit on ${branch}, then push ${branch}.\n   Push that branch and nothing else. Never push to ${config.repo.stagingBranch}\n   or ${config.repo.mainBranch}. A component branch ships nothing, which is\n   why pushing it is safe and why it is required.`,
+  ].map((step, index) => `${index + 1}. ${step}`);
+
   return [
     `Build the ${component.name} component.`,
     '',
@@ -145,18 +162,16 @@ export function implementationTask(input: TaskTextInput): string {
     `Branch: ${branch}. Create it from ${config.repo.mainBranch} if it is not there.`,
     '',
     'Then, in order:',
-    `1. Build the component and its stories, every variant, size and state.`,
-    '2. Write the contract file beside the component, with every field',
-    '   docs/component-contract.md lists.',
-    `3. ${IMPLEMENTATION_COMMANDS.storybook}, and confirm this component's`,
-    '   stories are in the built output before you go on.',
-    `4. ${IMPLEMENTATION_COMMANDS.test}. Every test passes.`,
-    `5. ${IMPLEMENTATION_COMMANDS.chromatic}, for the visual check.`,
-    `6. Commit on ${branch}, then push ${branch}.`,
-    `   Push that branch and nothing else. Never push to ${config.repo.stagingBranch}`,
-    `   or ${config.repo.mainBranch}. A component branch ships nothing, which is`,
-    '   why pushing it is safe and why it is required.',
+    ...steps,
     '',
+    ...(visualCheck
+      ? []
+      : [
+          'No visual test service is configured, so there is no visual check to',
+          'run and you are not expected to find one. Open the component in the',
+          'Storybook you just built and look at it yourself instead.',
+          '',
+        ]),
     'Finish with a report as your last message. It must contain the full',
     'commit URL, the https://github.com/... form, not a bare sha. Somebody',
     'fetches that URL and checks it resolves before anything moves, so a',
