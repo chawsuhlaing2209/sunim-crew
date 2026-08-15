@@ -5,7 +5,13 @@ export {
   recordCases,
   sweep,
 } from './sweep.js';
-export { extractCommitUrl, extractLink, urlsIn } from './extract.js';
+export {
+  extractCommitUrl,
+  extractDeployedLink,
+  extractLink,
+  isCodeHostLink,
+  urlsIn,
+} from './extract.js';
 export type { FixLane, Lane, SweepDeps } from './sweep.js';
 export { crew } from './crew.js';
 export type { Crew, CrewOptions } from './crew.js';

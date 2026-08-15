@@ -1,5 +1,5 @@
 import type { ComponentRow, DevelopmentStatus } from '../airtable/index.js';
-import { extractCommitUrl, extractLink } from './extract.js';
+import { extractCommitUrl, extractDeployedLink } from './extract.js';
 import type { StageAction } from './types.js';
 
 /**
@@ -29,7 +29,7 @@ export const PLAN: Readonly<Partial<Record<DevelopmentStatus, StageAction>>> = {
     role: 'DevOps',
     evidence: {
       field: 'storybook',
-      extract: (report) => extractLink(report),
+      extract: (report) => extractDeployedLink(report, { label: 'Staging' }),
       check: (port, claim) => port.linkLives(claim),
       missing:
         'said it was done but reported no staging link. A link that answers is the only thing that moves this on.',
@@ -77,7 +77,7 @@ export const PLAN: Readonly<Partial<Record<DevelopmentStatus, StageAction>>> = {
     gated: true,
     evidence: {
       field: 'productionUrl',
-      extract: (report) => extractLink(report),
+      extract: (report) => extractDeployedLink(report, { label: 'Production' }),
       check: (port, claim) => port.linkLives(claim),
       missing:
         'deployed, but reported no production URL. A live URL is the only thing that records this.',
@@ -103,7 +103,7 @@ export const DOCUMENT_ACTION: StageAction = {
     'The page is there and every required section is present. That is all this check can tell you. Somebody still has to read it and say whether it is any good, and this component is not really finished until they have.',
   evidence: {
     field: 'astro',
-    extract: (report) => extractLink(report),
+    extract: (report) => extractDeployedLink(report, { label: 'Page' }),
     check: (port, claim) => port.docsPageComplete(claim),
     missing:
       'wrote the page but reported no URL for it. The page has to be reachable to count.',
