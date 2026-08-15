@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   ConfigError,
@@ -6,6 +8,8 @@ import {
   FIELD_TABLE,
   FORMULA_FIELD_KEYS,
   OVERRIDES,
+  OVERRIDE_KEYS,
+  SECRET_KEYS,
   TABLE_KEYS,
   loadConfig,
   report,
@@ -126,6 +130,29 @@ describe('loadConfig', () => {
     expect(config.airtable.fields.commit).toBe('Git commit');
     // Everything left alone keeps the template default.
     expect(config.airtable.fields.astro).toBe('Astro Link');
+  });
+
+  it('documents every name it accepts, in the file people actually read', async () => {
+    // A setting the crew honours and the example file never mentions is a
+    // setting nobody finds. FIGMA_MCP_URL was one of those, and not knowing
+    // it existed sent a worker at a server that refuses the only credential
+    // anybody has.
+    const example = await readFile(
+      fileURLToPath(new URL('../../.env.example', import.meta.url)),
+      'utf8',
+    );
+    const undocumented = OVERRIDE_KEYS.filter((key) => !example.includes(key));
+
+    expect(undocumented).toEqual([]);
+  });
+
+  it('documents every secret it reads, in the same file', async () => {
+    const example = await readFile(
+      fileURLToPath(new URL('../../.env.example', import.meta.url)),
+      'utf8',
+    );
+
+    expect(SECRET_KEYS.filter((key) => !example.includes(key))).toEqual([]);
   });
 
   it('gives every table and field name an environment name', () => {

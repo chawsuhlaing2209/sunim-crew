@@ -4,7 +4,8 @@
     "never a secret: every token lives in the environment, see .env.example.",
     "The crew addresses Airtable by NAME and resolves each name to your base's",
     "ids at startup, so a duplicated base needs only a new airtable.baseId.",
-    "Change the tables and fields maps only if your base uses other names."
+    "Change the tables and fields maps only if your base uses other names.",
+    "figma.mcpUrl: the Dev Mode server the desktop app runs needs no token. The hosted one refuses a personal access token."
   ],
   "airtable": {
     "baseId": "appXXXXXXXXXXXXXX",
@@ -39,20 +40,31 @@
     }
   },
   "figma": {
-    "fileKey": ""
+    "fileKey": "",
+    "mcpUrl": "http://127.0.0.1:3845/mcp"
   },
   "repo": {
     "pathOrUrl": "/absolute/path/to/your/design-system",
     "stagingBranch": "staging",
     "mainBranch": "main",
-    "slug": "owner/design-system"
+    "slug": "owner/design-system",
+    "stageCommand": "",
+    "productionCommand": "",
+    "productionUrlTemplate": ""
   },
   "npm": {
-    "registry": "https://registry.npmjs.org"
+    "registry": "https://registry.npmjs.org",
+    "publishCommand": "npm publish"
   },
   "worker": {
+    "auth": "subscription",
     "model": "",
     "maxMinutes": ""
   },
-  "approvers": [""]
+  "approvers": [""],
+  "docs": {
+    "path": "",
+    "urlTemplate": "",
+    "deployCommand": ""
+  }
 }
