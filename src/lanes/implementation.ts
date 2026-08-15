@@ -105,18 +105,33 @@ export function branchFor(component: ComponentRow): string {
   return `component/${slug === '' ? component.id.toLowerCase() : slug}`;
 }
 
+/** The Dev Mode server the Figma desktop app runs, on this machine. */
+export function isLocalMcp(url: string): boolean {
+  return /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(url);
+}
+
 /**
  * The Figma MCP, defined for the child rather than inherited from the machine.
  * The runner passes --strict-mcp-config, so this is the only server a worker
- * sees, and the token comes from the child's own environment.
+ * sees, and the credential comes from the child's own environment.
+ *
+ * Two servers, two arrangements. The desktop app's Dev Mode server runs on
+ * this machine and authenticates through the app you are already signed in
+ * to, so a token sent to it is noise at best. The hosted one wants a personal
+ * access token in X-Figma-Token: it rejects the same token in an
+ * Authorization Bearer header, and says so in as many words.
  */
 export function figmaMcpConfig(config: Config): string {
+  const url = config.figma.mcpUrl;
+
   return JSON.stringify({
     mcpServers: {
       figma: {
         type: 'http',
-        url: config.figma.mcpUrl,
-        headers: { Authorization: 'Bearer ${FIGMA_TOKEN}' },
+        url,
+        ...(isLocalMcp(url)
+          ? {}
+          : { headers: { 'X-Figma-Token': '${FIGMA_TOKEN}' } }),
       },
     },
   });

@@ -133,6 +133,7 @@ The crew addresses Airtable by **name**, and resolves those names to your base's
 
 ## The documents
 
+- `docs/first-run.md`, taking one component all the way through, step by step
 - `CLAUDE.md`, the rules this project is built to
 - `docs/crew.md`, the design, and the status table above in full
 - `docs/component-contract.md`, what done means for a component and its docs page

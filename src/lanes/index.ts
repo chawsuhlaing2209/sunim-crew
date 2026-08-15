@@ -10,6 +10,7 @@ export {
   figmaSource,
   implementationDelegation,
   implementationTask,
+  isLocalMcp,
   runImplementation,
 } from './implementation.js';
 export type {

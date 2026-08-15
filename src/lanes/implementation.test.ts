@@ -11,6 +11,7 @@ import {
   figmaMcpConfig,
   figmaSource,
   implementationDelegation,
+  isLocalMcp,
   runImplementation,
 } from './index.js';
 import type { RunnerPort } from './index.js';
@@ -124,8 +125,14 @@ describe('the Figma MCP config', () => {
     expect(parsed.mcpServers['figma']?.['url']).toBe(
       'https://mcp.figma.com/mcp',
     );
+    // The header Figma actually wants. It refuses the same token in an
+    // Authorization Bearer header: "figd_ tokens must be passed via
+    // X-Figma-Token header, not Authorization".
+    const headers = parsed.mcpServers['figma']?.['headers'] as
+      Record<string, string> | undefined;
+    expect(headers?.['X-Figma-Token']).toBe('${FIGMA_TOKEN}');
+    expect(JSON.stringify(parsed)).not.toContain('Authorization');
     // The literal placeholder, expanded by the child, not the token itself.
-    expect(JSON.stringify(parsed)).toContain('Bearer ${FIGMA_TOKEN}');
     expect(JSON.stringify(parsed)).not.toContain(config.figma.token);
   });
 
@@ -146,6 +153,14 @@ describe('the Figma MCP config', () => {
     });
 
     expect(figmaMcpConfig(local)).toContain('http://127.0.0.1:3845/mcp');
+    // The desktop app authenticates through the app you are already signed
+    // in to. A token sent there is noise, and noise that looks like a
+    // credential is the kind that gets logged somewhere.
+    expect(figmaMcpConfig(local)).not.toContain('FIGMA_TOKEN');
+    expect(isLocalMcp('http://localhost:3845/mcp')).toBe(true);
+    expect(isLocalMcp('https://mcp.figma.com/mcp')).toBe(false);
+    // Not a hosted address that merely starts the same way.
+    expect(isLocalMcp('https://localhost.evil.example.com/mcp')).toBe(false);
   });
 });
 
