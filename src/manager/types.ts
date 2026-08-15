@@ -17,6 +17,10 @@ export type OutcomeKind =
   | 'unverifiable'
   /** Reported done and said nothing the manager could check. */
   | 'unreported'
+  /** A worker ran and did not finish. Nothing to check, nothing written. */
+  | 'unfinished'
+  /** A worker stopped because the component is broken. A Fix subtask is open. */
+  | 'blocked'
   /** This status is handled by a step that is not built yet. */
   | 'deferred'
   /** Nothing for the crew to do. */

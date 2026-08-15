@@ -262,6 +262,8 @@ function row(overrides: Partial<TestRow> = {}): TestRow {
     name: 'Button, primary, hover',
     result: 'Passed',
     resultRaw: 'Passed',
+    expected: undefined,
+    suggestion: undefined,
     componentIds: ['recButton'],
     attachments: [
       { id: 'att1', url: 'https://example.com/shot.png', filename: 'shot.png' },

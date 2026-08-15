@@ -3,7 +3,12 @@ import { TaskKeyConflictError } from './errors.js';
 import { httpAsanaGateway } from './gateway.js';
 import type { AsanaGateway, TaskData } from './gateway.js';
 import { parseKey, renderKey, withKey } from './key.js';
-import { LIFECYCLE_STAGES, STAGE_DONE_WHEN, STANDING_STAGES } from './types.js';
+import {
+  LIFECYCLE_STAGES,
+  MANAGER_MARKER,
+  STAGE_DONE_WHEN,
+  STANDING_STAGES,
+} from './types.js';
 import type {
   AgentReport,
   ComponentKey,
@@ -244,7 +249,9 @@ export function createAsanaClient(
     async readResult(subtaskGid) {
       const stories = await gateway.listStories(subtaskGid);
       const comments = stories.filter(
-        (story) => story.resource_subtype === 'comment_added',
+        (story) =>
+          story.resource_subtype === 'comment_added' &&
+          !story.text.trimStart().startsWith(MANAGER_MARKER),
       );
       const last = comments[comments.length - 1];
 

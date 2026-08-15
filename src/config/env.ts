@@ -51,9 +51,11 @@ export const OVERRIDES: Readonly<Record<string, string>> = {
   ASANA_WORKSPACE_ID: 'asana.workspaceId',
   ASANA_PROJECT_ID: 'asana.projectId',
   FIGMA_FILE_KEY: 'figma.fileKey',
+  FIGMA_MCP_URL: 'figma.mcpUrl',
   REPO_PATH_OR_URL: 'repo.pathOrUrl',
   REPO_STAGING_BRANCH: 'repo.stagingBranch',
   REPO_MAIN_BRANCH: 'repo.mainBranch',
+  REPO_STAGE_COMMAND: 'repo.stageCommand',
   GITHUB_REPO: 'repo.slug',
   NPM_REGISTRY: 'npm.registry',
   ...Object.fromEntries(

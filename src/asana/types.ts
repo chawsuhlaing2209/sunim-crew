@@ -55,6 +55,13 @@ export const STAGE_DONE_WHEN: Readonly<Record<Stage, string>> = {
     'Astro page written with every required section. Report the page URL here.',
 };
 
+/**
+ * The manager signs its own comments. readResult skips them, so a refusal the
+ * manager wrote is never read back on the next sweep as if a worker had said
+ * it. Only what a worker reports counts as a report.
+ */
+export const MANAGER_MARKER = 'Sunim Crew, manager';
+
 /** One component, as Asana and Airtable both know it. */
 export interface ComponentKey {
   /** The component name. This is the task name. */

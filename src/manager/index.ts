@@ -9,9 +9,14 @@ import {
 import type { VerifyPort } from './types.js';
 
 export { PLAN, actionFor } from './plan.js';
-export { describeSweep, sweep } from './sweep.js';
+export {
+  FIX_DETAIL_LIMIT,
+  describeSweep,
+  recordCases,
+  sweep,
+} from './sweep.js';
 export { extractCommitUrl, extractLink, urlsIn } from './extract.js';
-export type { SweepDeps } from './sweep.js';
+export type { Lane, SweepDeps } from './sweep.js';
 export type {
   ComponentOutcome,
   OutcomeKind,

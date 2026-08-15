@@ -1,7 +1,8 @@
 import type { AirtableClient, ComponentRow } from '../airtable/index.js';
-import { airtableRowUrl } from '../asana/index.js';
-import type { AgentRole, AsanaClient, Subtask } from '../asana/index.js';
+import { MANAGER_MARKER, airtableRowUrl } from '../asana/index.js';
+import type { AgentRole, AsanaClient, Stage, Subtask } from '../asana/index.js';
 import type { AgentKey, Config } from '../config/index.js';
+import type { LaneRun, PreparedCase } from '../lanes/index.js';
 import { isInconclusive } from '../verify/index.js';
 import type { Evidence, Result } from '../verify/index.js';
 import { actionFor } from './plan.js';
@@ -13,11 +14,20 @@ import type {
   VerifyPort,
 } from './types.js';
 
+/**
+ * A lane does the craft for one stage: it spawns a worker and hands back what
+ * the worker said. Optional. With no lane wired, the manager opens and assigns
+ * the subtask and waits, which is what a person picking up the work needs.
+ */
+export type Lane = (component: ComponentRow) => Promise<LaneRun>;
+
 export interface SweepDeps {
   readonly config: Config;
   readonly airtable: AirtableClient;
   readonly asana: AsanaClient;
   readonly verify: VerifyPort;
+  /** Keyed by stage. Only the stages you want run automatically.  */
+  readonly lanes?: Partial<Record<Exclude<Stage, 'Fix'>, Lane>>;
 }
 
 const ROLE_TO_AGENT: Readonly<Record<AgentRole, AgentKey>> = {
@@ -27,6 +37,9 @@ const ROLE_TO_AGENT: Readonly<Record<AgentRole, AgentKey>> = {
   Manager: 'manager',
 };
 
+/** How much of a worker's account of a failure a Fix subtask carries. */
+export const FIX_DETAIL_LIMIT = 1500;
+
 const KINDS: readonly OutcomeKind[] = [
   'assigned',
   'waiting',
@@ -34,6 +47,8 @@ const KINDS: readonly OutcomeKind[] = [
   'flagged',
   'unverifiable',
   'unreported',
+  'unfinished',
+  'blocked',
   'deferred',
   'idle',
 ];
@@ -136,17 +151,123 @@ async function sweepOne(
     subtaskGid: subtask.gid,
   } as const;
 
-  if (!subtask.completed) {
-    return {
-      ...shared,
-      kind: opened ? 'assigned' : 'waiting',
-      note: opened
-        ? `opened ${action.stage} for the ${action.role}${assignee === undefined ? ', unassigned' : ''}`
-        : `${action.stage} is with the ${action.role}, not done yet`,
-    };
+  let current = subtask;
+
+  if (!current.completed) {
+    const lane = deps.lanes?.[action.stage];
+
+    if (lane === undefined) {
+      return {
+        ...shared,
+        kind: opened ? 'assigned' : 'waiting',
+        note: opened
+          ? `opened ${action.stage} for the ${action.role}${assignee === undefined ? ', unassigned' : ''}`
+          : `${action.stage} is with the ${action.role}, not done yet`,
+      };
+    }
+
+    // Run the craft. The worker reports; it writes nothing anywhere.
+    const run = await lane(component);
+
+    if (run.report.trim() !== '') {
+      await deps.asana.reportOnSubtask(
+        current.gid,
+        [`${action.role}, via the crew`, '', run.report.trim()].join('\n'),
+      );
+    }
+
+    // The worker says the component itself is what broke. That is not a
+    // failure of this stage, it is work for whoever built it, so a Fix
+    // subtask opens carrying what the worker saw. This stage stays open and
+    // is picked up again once the fix lands.
+    if (run.blocked?.belongsToComponent === true) {
+      const fix = await deps.asana.ensureFixSubtask(
+        task.gid,
+        {
+          caseName: `${action.stage} build`,
+          expected: `${component.name} builds and reaches ${deps.config.repo.stagingBranch}`,
+          suggestion: run.blocked.reason.slice(0, FIX_DETAIL_LIMIT),
+        },
+        {
+          ...(deps.config.asana.agents.engineer === undefined
+            ? {}
+            : { assignee: deps.config.asana.agents.engineer }),
+        },
+      );
+
+      return {
+        ...shared,
+        kind: 'blocked',
+        note: `${run.note}. Opened ${fix.name} for the Engineer.`,
+      };
+    }
+
+    if (!run.ok) {
+      return { ...shared, kind: 'unfinished', note: run.note };
+    }
+
+    // A lane that produced rows it cannot write itself. QA has no Airtable
+    // access on purpose, so this is where its cases become records, and the
+    // screenshots become the attachments that make them count.
+    if (run.cases !== undefined && run.cases.length > 0) {
+      const written = await recordCases(component, run.cases, deps);
+      if (written.problems.length > 0) {
+        return {
+          ...shared,
+          kind: 'unfinished',
+          note: `${run.note}, but ${written.problems.join('; ')}`,
+        };
+      }
+    }
+
+    // It says it is done, so the subtask says so too. Whether it is true is
+    // the next thing this function finds out.
+    current = await deps.asana.completeSubtask(current.gid);
   }
 
-  return await check(component, action, subtask, shared, deps);
+  return await check(component, action, current, shared, deps);
+}
+
+/**
+ * Put QA's cases into the base, one row each, with its screenshot attached.
+ *
+ * A case whose screenshot is missing is written anyway, and the missing file
+ * is reported: testRowsReal then refuses the whole set, which is the right
+ * outcome. Nothing here decides anything, it only records what QA saw.
+ */
+export async function recordCases(
+  component: ComponentRow,
+  cases: readonly PreparedCase[],
+  deps: SweepDeps,
+): Promise<{ written: number; problems: string[] }> {
+  const problems: string[] = [];
+
+  // A sweep that runs twice must not write the same case twice.
+  const existing = new Set(
+    (await deps.airtable.listTestRows(component.id)).map((row) => row.name),
+  );
+  const fresh = cases.filter((entry) => !existing.has(entry.row.name));
+
+  if (fresh.length === 0) return { written: 0, problems };
+
+  const rows = await deps.airtable.createTestRows(
+    component.id,
+    fresh.map((entry) => entry.row),
+  );
+
+  for (const [index, row] of rows.entries()) {
+    const source = fresh[index];
+    if (source === undefined) continue;
+    try {
+      await deps.airtable.attachToTestRow(row.id, source.screenshotPath);
+    } catch (error) {
+      problems.push(
+        `the screenshot for "${source.row.name}" did not attach: ${String(error)}`,
+      );
+    }
+  }
+
+  return { written: rows.length, problems };
 }
 
 /**
@@ -253,7 +374,7 @@ async function refuse(
 
 function managerNote(note: string): string {
   return [
-    'Sunim Crew, manager',
+    MANAGER_MARKER,
     '',
     note,
     '',

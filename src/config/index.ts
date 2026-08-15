@@ -66,7 +66,12 @@ export interface Config {
     /** Role to Asana user. A role nobody holds is left unassigned. */
     readonly agents: Readonly<Partial<Record<AgentKey, string>>>;
   };
-  readonly figma: { readonly token: string; readonly fileKey?: string };
+  readonly figma: {
+    readonly token: string;
+    readonly fileKey?: string;
+    /** The MCP server the engineer reads the design through. */
+    readonly mcpUrl: string;
+  };
   readonly chromatic: { readonly projectToken?: string };
   readonly npm: { readonly token?: string; readonly registry: string };
   readonly repo: {
@@ -74,6 +79,8 @@ export interface Config {
     readonly stagingBranch: string;
     readonly mainBranch: string;
     readonly slug?: string;
+    /** The one command that puts a branch on staging, when the repo has one. */
+    readonly stageCommand?: string;
   };
 }
 
@@ -208,6 +215,7 @@ function toConfig(secrets: Secrets, project: ProjectConfig): Config {
     }),
     figma: Object.freeze({
       token: secrets.FIGMA_TOKEN,
+      mcpUrl: project.figma.mcpUrl,
       ...(project.figma.fileKey === undefined
         ? {}
         : { fileKey: project.figma.fileKey }),
@@ -226,6 +234,9 @@ function toConfig(secrets: Secrets, project: ProjectConfig): Config {
       stagingBranch: project.repo.stagingBranch,
       mainBranch: project.repo.mainBranch,
       ...(slug === undefined ? {} : { slug }),
+      ...(project.repo.stageCommand === undefined
+        ? {}
+        : { stageCommand: project.repo.stageCommand }),
     }),
   });
 }

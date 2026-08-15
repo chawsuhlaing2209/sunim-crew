@@ -12,9 +12,8 @@
 export const FORBIDDEN_IN_CHILD: readonly string[] = [
   // Airtable holds the status. A worker with this token could write evidence.
   'AIRTABLE_TOKEN',
-  // The publish keys. Only the gated deploy step holds these.
+  // The publish key. Only the gated deploy step holds this.
   'NPM_TOKEN',
-  'CHROMATIC_TOKEN',
   // Not a secret, but a worker has no business addressing the base at all.
   'AIRTABLE_BASE_ID',
 ];

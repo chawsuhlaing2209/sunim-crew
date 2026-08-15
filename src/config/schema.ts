@@ -9,6 +9,15 @@ import { isAbsolute } from 'node:path';
  * base with different names by editing the map, not the code.
  */
 
+/** The only values with a fallback. Declared once, used by the schema below. */
+export const DEFAULTS = {
+  NPM_REGISTRY: 'https://registry.npmjs.org',
+  // Figma's hosted MCP server. A team running the Figma desktop app can point
+  // this at the local Dev Mode server instead, normally
+  // http://127.0.0.1:3845/mcp
+  FIGMA_MCP_URL: 'https://mcp.figma.com/mcp',
+} as const;
+
 const name = (fallback: string) =>
   z.string().min(1, 'must not be empty').default(fallback);
 
@@ -33,6 +42,8 @@ export const fieldsSchema = z.object({
   // Storybook Testing table.
   testResults: name('Testing Results'),
   componentLink: name('Components'),
+  expectedResults: name('Expected Results'),
+  suggestion: name('Suggestion for Improvement'),
 });
 
 /** The crew's roles, and who holds each one in your Asana. */
@@ -68,6 +79,8 @@ export const FIELD_TABLE: Readonly<Record<FieldKey, TableKey>> = {
   passedTests: 'components',
   testResults: 'tests',
   componentLink: 'tests',
+  expectedResults: 'tests',
+  suggestion: 'tests',
 };
 
 /**
@@ -126,6 +139,10 @@ export const projectSchema = z.object({
         .string()
         .regex(/^[A-Za-z0-9]+$/, 'must be a Figma file key')
         .optional(),
+      mcpUrl: z
+        .string()
+        .regex(/^https?:\/\/\S+$/, 'must be an http or https url')
+        .default(DEFAULTS.FIGMA_MCP_URL),
     })
     .prefault({}),
   repo: z.object({
@@ -138,13 +155,17 @@ export const projectSchema = z.object({
       .string()
       .regex(/^[^/\s]+\/[^/\s]+$/, 'must look like owner/repo')
       .optional(),
+    // How this repo puts a branch on staging. Left unset, DevOps reads the
+    // repo's own scripts and CI config to find the path, and says so if the
+    // repo has none.
+    stageCommand: z.string().min(1).optional(),
   }),
   npm: z
     .object({
       registry: z
         .string()
         .regex(/^https?:\/\/\S+$/, 'must be an http or https url')
-        .default('https://registry.npmjs.org'),
+        .default(DEFAULTS.NPM_REGISTRY),
     })
     .prefault({}),
 });
