@@ -16,7 +16,7 @@ One config value, `project_path`: the local path of the design system repo the c
 
 ## Test B — an existing design system
 
-1. Set `project_path` to your Productive Schedule repo, which already has components.
+1. Set `project_path` to an existing design system repo, one that already has components.
 2. Add a request to add or improve one component. It becomes a `to_do`.
 3. Run `npm run sweep`.
 4. Expect: the crew reads the existing components, matches their conventions, builds the new one, and commits it there.

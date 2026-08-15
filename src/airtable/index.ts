@@ -1,4 +1,9 @@
-export { connect, createClient } from './client.js';
+export {
+  MAX_ATTACHMENT_BYTES,
+  connect,
+  contentTypeFor,
+  createClient,
+} from './client.js';
 export type { AirtableClient, ClientDeps, EvidencePatch } from './client.js';
 
 export {
@@ -8,7 +13,12 @@ export {
 } from './errors.js';
 
 export { airtableGateway, fieldRef, quote } from './gateway.js';
-export type { RecordGateway, RecordRow, SelectOptions } from './gateway.js';
+export type {
+  RecordGateway,
+  RecordRow,
+  SelectOptions,
+  UploadedAttachment,
+} from './gateway.js';
 
 export {
   COMPUTED_FIELD_TYPES,

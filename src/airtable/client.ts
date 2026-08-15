@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { basename, extname } from 'node:path';
 import { EVIDENCE_FIELD_KEYS, FORMULA_FIELD_KEYS } from '../config/index.js';
 import type { Config, EvidenceFieldKey, FieldKey } from '../config/index.js';
 import { FormulaFieldWriteError } from './errors.js';
@@ -35,6 +37,29 @@ export interface AirtableClient {
     rows: readonly NewTestRow[],
   ): Promise<TestRow[]>;
   updateTestRow(recordId: string, patch: TestRowPatch): Promise<TestRow>;
+  /**
+   * Put a screenshot on a test row. A row with no attachment does not count
+   * as tested, so this is what makes QA's word into evidence.
+   */
+  attachToTestRow(rowId: string, filePath: string): Promise<void>;
+}
+
+/** Airtable takes the bytes directly, up to this much once encoded. */
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+
+const CONTENT_TYPES: Readonly<Record<string, string>> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.pdf': 'application/pdf',
+};
+
+export function contentTypeFor(filePath: string): string {
+  return (
+    CONTENT_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream'
+  );
 }
 
 function text(value: unknown): string | undefined {
@@ -158,6 +183,8 @@ export function createClient(
       name: text(row.fields[tests.primaryFieldId]) ?? '',
       result: parsed?.success === true ? parsed.data : undefined,
       resultRaw,
+      expected: text(row.fields[field('expectedResults').id]),
+      suggestion: text(row.fields[field('suggestion').id]),
       componentIds: ids(row.fields[field('componentLink').id]),
       attachments: tests.attachmentFieldIds.flatMap((id) =>
         attachments(row.fields[id]),
@@ -248,6 +275,12 @@ export function createClient(
           [tests.primaryFieldId]: row.name,
           [field('testResults').id]: row.result,
           [field('componentLink').id]: [componentRecordId],
+          ...(row.expected === undefined
+            ? {}
+            : { [field('expectedResults').id]: row.expected }),
+          ...(row.suggestion === undefined
+            ? {}
+            : { [field('suggestion').id]: row.suggestion }),
         } satisfies Cells,
       }));
 
@@ -256,11 +289,39 @@ export function createClient(
       return created.map(toTestRow);
     },
 
+    async attachToTestRow(rowId, filePath) {
+      const fieldId = tests.attachmentFieldIds[0];
+      if (fieldId === undefined) {
+        throw new Error(
+          `Table "${tests.name}" has no attachment field, so a screenshot has nowhere to go. Add one.`,
+        );
+      }
+
+      const bytes = await readFile(filePath);
+      if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+        throw new Error(
+          `${basename(filePath)} is ${Math.round(bytes.byteLength / 1024)}KB, over the ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB Airtable takes directly`,
+        );
+      }
+
+      await gateway.uploadAttachment(rowId, fieldId, {
+        filename: basename(filePath),
+        contentType: contentTypeFor(filePath),
+        file: bytes.toString('base64'),
+      });
+    },
+
     async updateTestRow(recordId, patch) {
       const payload: Cells = {};
       if (patch.name !== undefined) payload[tests.primaryFieldId] = patch.name;
       if (patch.result !== undefined) {
         payload[field('testResults').id] = patch.result;
+      }
+      if (patch.expected !== undefined) {
+        payload[field('expectedResults').id] = patch.expected;
+      }
+      if (patch.suggestion !== undefined) {
+        payload[field('suggestion').id] = patch.suggestion;
       }
       if (Object.keys(payload).length === 0) {
         throw new Error('updateTestRow was given nothing to write');

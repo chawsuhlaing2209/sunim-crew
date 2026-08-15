@@ -33,6 +33,16 @@ const FIELDS: Record<FieldKey, { id: string; name: string; type: string }> = {
     name: 'Components',
     type: 'multipleRecordLinks',
   },
+  expectedResults: {
+    id: 'fldExpected',
+    name: 'Expected Results',
+    type: 'multilineText',
+  },
+  suggestion: {
+    id: 'fldSuggestion',
+    name: 'Suggestion for Improvement',
+    type: 'multilineText',
+  },
 };
 
 function schema(): ResolvedSchema {
@@ -77,7 +87,7 @@ function schema(): ResolvedSchema {
 }
 
 interface Call {
-  readonly kind: 'select' | 'create' | 'update';
+  readonly kind: 'select' | 'create' | 'update' | 'upload';
   readonly tableId: string;
   readonly formula?: string | undefined;
   readonly fields?: readonly Cells[];
@@ -106,6 +116,14 @@ function fakeGateway(rows: Record<string, RecordRow[]>): {
           fields: record.fields,
         })),
       );
+    },
+    uploadAttachment(recordId, fieldId, attachment) {
+      calls.push({
+        kind: 'upload',
+        tableId: `${recordId}/${fieldId}`,
+        fields: [{ filename: attachment.filename }],
+      });
+      return Promise.resolve();
     },
     update(tableId, records) {
       calls.push({

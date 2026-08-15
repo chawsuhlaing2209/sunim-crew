@@ -56,6 +56,8 @@ export interface TestRow {
   readonly name: string;
   readonly result: TestResult | undefined;
   readonly resultRaw: string | undefined;
+  readonly expected: string | undefined;
+  readonly suggestion: string | undefined;
   readonly componentIds: readonly string[];
   readonly attachments: readonly Attachment[];
 }
@@ -63,9 +65,15 @@ export interface TestRow {
 export interface NewTestRow {
   readonly name: string;
   readonly result: TestResult;
+  /** What the case should have done. QA fills this in on a failure. */
+  readonly expected?: string;
+  /** What to change. The engineer applies it without re-diagnosing. */
+  readonly suggestion?: string;
 }
 
 export interface TestRowPatch {
   readonly name?: string;
   readonly result?: TestResult;
+  readonly expected?: string;
+  readonly suggestion?: string;
 }

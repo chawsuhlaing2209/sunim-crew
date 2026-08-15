@@ -2,6 +2,7 @@
   "name": "sunim-crew",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "An installable agentic crew that ships design system components.",
   "type": "module",
   "engines": {
@@ -14,7 +15,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && mkdir -p dist/briefs && cp src/briefs/*.md dist/briefs/",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -23,6 +24,12 @@
     "format:check": "prettier --check .",
     "config:check": "npm run build && node --env-file-if-exists=.env dist/config/check.js",
     "airtable:check": "npm run build && node --env-file-if-exists=.env dist/airtable/check.js",
+    "approve": "npm run build && node --env-file-if-exists=.env dist/gate/approve.js",
+    "sweep": "npm run build && node --env-file-if-exists=.env dist/manager/sweep-cli.js",
+    "schedule": "npm run build && node dist/manager/schedule-cli.js",
+    "check:status": "vitest run src/airtable/no-status-writes.test.ts",
+    "base:create": "npm run build && node --env-file-if-exists=.env dist/airtable/create-base.js",
+    "setup": "bash scripts/setup.sh",
     "prepare": "husky"
   },
   "lint-staged": {

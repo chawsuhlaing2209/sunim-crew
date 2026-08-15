@@ -17,6 +17,14 @@ export type OutcomeKind =
   | 'unverifiable'
   /** Reported done and said nothing the manager could check. */
   | 'unreported'
+  /** A worker ran and did not finish. Nothing to check, nothing written. */
+  | 'unfinished'
+  /** A worker stopped because the component is broken. A Fix subtask is open. */
+  | 'blocked'
+  /** Ready to ship, waiting for a person. Nothing runs until they say so. */
+  | 'awaiting-approval'
+  /** Approved, deployed and published. */
+  | 'released'
   /** This status is handled by a step that is not built yet. */
   | 'deferred'
   /** Nothing for the crew to do. */
@@ -70,7 +78,8 @@ export interface StageEvidence {
 
 /** What one derived status asks the manager to do next. */
 export interface StageAction {
-  readonly stage: Exclude<Stage, 'Fix'>;
+  /** Fix only appears with perFailedRow, since it is one subtask per case. */
+  readonly stage: Stage;
   readonly role: AgentRole;
   /** The evidence this stage produces, when it produces a field. */
   readonly evidence?: StageEvidence;
@@ -83,6 +92,24 @@ export interface StageAction {
     port: VerifyPort,
     component: ComponentRow,
   ) => Promise<Result>;
+  /**
+   * This status is not one stage with one subtask. It opens one Fix subtask
+   * per failed row and works through them.
+   */
+  readonly perFailedRow?: boolean;
+  /**
+   * The stage ran once already and has to run again. Its subtask is reopened
+   * before the lane is asked to do anything.
+   */
+  readonly retest?: boolean;
+  /** Nothing happens here until a named person has approved it. */
+  readonly gated?: boolean;
+  /**
+   * Posted on the subtask when this stage's evidence is written. For a stage
+   * where the machine check is not the whole story and a person still has to
+   * look, which the log should say out loud rather than imply.
+   */
+  readonly signOff?: string;
   /** Set when a later step owns this status. */
   readonly deferredTo?: string;
 }

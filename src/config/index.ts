@@ -66,14 +66,38 @@ export interface Config {
     /** Role to Asana user. A role nobody holds is left unassigned. */
     readonly agents: Readonly<Partial<Record<AgentKey, string>>>;
   };
-  readonly figma: { readonly token: string; readonly fileKey?: string };
+  readonly figma: {
+    readonly token: string;
+    readonly fileKey?: string;
+    /** The MCP server the engineer reads the design through. */
+    readonly mcpUrl: string;
+  };
   readonly chromatic: { readonly projectToken?: string };
-  readonly npm: { readonly token?: string; readonly registry: string };
+  readonly npm: {
+    readonly token?: string;
+    readonly registry: string;
+    readonly publishCommand: string;
+  };
+  readonly docs: {
+    /** Where a component page is written. */
+    readonly path?: string;
+    /** Where that page appears once the site is built. {slug} is the slug. */
+    readonly urlTemplate?: string;
+    readonly deployCommand?: string;
+  };
+  /** Who may approve a production deploy. Empty means nobody can. */
+  readonly approvers: readonly string[];
   readonly repo: {
     readonly pathOrUrl: string;
     readonly stagingBranch: string;
     readonly mainBranch: string;
     readonly slug?: string;
+    /** The one command that puts a branch on staging, when the repo has one. */
+    readonly stageCommand?: string;
+    /** How production is deployed. Held by the gated step alone. */
+    readonly productionCommand?: string;
+    /** Where a component lives in production. {slug} is the component slug. */
+    readonly productionUrlTemplate?: string;
   };
 }
 
@@ -97,10 +121,24 @@ export class ConfigError extends Error {
 type Env = Readonly<Record<string, string | undefined>>;
 type Plain = Record<string, unknown>;
 
-/** An unset variable and an empty one mean the same thing: absent. */
+/**
+ * An unset variable and an empty one mean the same thing: absent.
+ *
+ * A value that begins with # is also absent. That is what a mis-parsed
+ * comment looks like, and Node's --env-file leaves the inline comment on the
+ * final assignment in a file, so a .env ending in
+ *
+ *   NPM_TOKEN=            # npmjs.com, publish scope
+ *
+ * hands back the comment as the value. Read literally, a fresh clone would
+ * believe it holds a publish key. No real token starts with a hash.
+ */
 function value(env: Env, key: string): string | undefined {
   const raw = env[key];
-  return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : undefined;
+  if (typeof raw !== 'string') return undefined;
+
+  const trimmed = raw.trim();
+  return trimmed === '' || trimmed.startsWith('#') ? undefined : trimmed;
 }
 
 function setPath(target: Plain, path: string, next: string): void {
@@ -208,6 +246,7 @@ function toConfig(secrets: Secrets, project: ProjectConfig): Config {
     }),
     figma: Object.freeze({
       token: secrets.FIGMA_TOKEN,
+      mcpUrl: project.figma.mcpUrl,
       ...(project.figma.fileKey === undefined
         ? {}
         : { fileKey: project.figma.fileKey }),
@@ -219,13 +258,33 @@ function toConfig(secrets: Secrets, project: ProjectConfig): Config {
     ),
     npm: Object.freeze({
       registry: project.npm.registry,
+      publishCommand: project.npm.publishCommand,
       ...(secrets.NPM_TOKEN === undefined ? {} : { token: secrets.NPM_TOKEN }),
     }),
+    docs: Object.freeze({
+      ...(project.docs.path === undefined ? {} : { path: project.docs.path }),
+      ...(project.docs.urlTemplate === undefined
+        ? {}
+        : { urlTemplate: project.docs.urlTemplate }),
+      ...(project.docs.deployCommand === undefined
+        ? {}
+        : { deployCommand: project.docs.deployCommand }),
+    }),
+    approvers: Object.freeze([...project.approvers]),
     repo: Object.freeze({
       pathOrUrl: project.repo.pathOrUrl,
       stagingBranch: project.repo.stagingBranch,
       mainBranch: project.repo.mainBranch,
       ...(slug === undefined ? {} : { slug }),
+      ...(project.repo.stageCommand === undefined
+        ? {}
+        : { stageCommand: project.repo.stageCommand }),
+      ...(project.repo.productionCommand === undefined
+        ? {}
+        : { productionCommand: project.repo.productionCommand }),
+      ...(project.repo.productionUrlTemplate === undefined
+        ? {}
+        : { productionUrlTemplate: project.repo.productionUrlTemplate }),
     }),
   });
 }

@@ -9,6 +9,25 @@ export {
 export type { DelegateDeps, SpawnFn } from './delegate.js';
 
 export {
+  TIMEOUT_STRIKES,
+  agentOf,
+  describeDelegation,
+  describeFlag,
+  fileJournal,
+  memoryJournal,
+  repeatedTimeouts,
+  watch,
+} from './journal.js';
+export type {
+  Delegator,
+  DelegationRecord,
+  Journal,
+  TimeoutFlag,
+  WatchDeps,
+  WatchedRunner,
+} from './journal.js';
+
+export {
   FORBIDDEN_IN_CHILD,
   ForbiddenChildKeyError,
   SYSTEM_PASSTHROUGH,

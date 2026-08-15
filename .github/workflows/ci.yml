@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # First, and on its own, so a failure here is unmistakable. The status
+      # is a formula derived from evidence. Code that writes it directly
+      # would let a component be moved without the work being done, and the
+      # whole design rests on that not being possible.
+      - name: No code writes the Development status
+        run: npm run check:status
+
+      - name: Nothing of anyone's is hardcoded
+        run: npx vitest run src/config/no-hardcoding.test.ts
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build

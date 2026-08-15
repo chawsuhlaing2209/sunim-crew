@@ -1,4 +1,4 @@
-import type { DevelopmentStatus } from '../airtable/index.js';
+import type { ComponentRow, DevelopmentStatus } from '../airtable/index.js';
 import { extractCommitUrl, extractLink } from './extract.js';
 import type { StageAction } from './types.js';
 
@@ -44,36 +44,86 @@ export const PLAN: Readonly<Partial<Record<DevelopmentStatus, StageAction>>> = {
     confirm: (port, component) => port.testRowsReal(component.id),
   },
 
+  // One Fix subtask per failed row, each carrying only its own case. The
+  // engineer applies the suggestion, and the manager marks the row.
   'To be fixed': {
-    stage: 'Test',
+    stage: 'Fix',
     role: 'Engineer',
-    deferredTo: 'step 10, the fix loop, one Fix subtask per failed row',
+    perFailedRow: true,
   },
 
+  // Some rows are marked, some are not. The same work, on what is left.
   Fixing: {
-    stage: 'Test',
+    stage: 'Fix',
     role: 'Engineer',
-    deferredTo: 'step 10, the fix loop',
+    perFailedRow: true,
   },
 
+  // Every row is marked Fixed (To re-test). Back to QA, who tests again and
+  // writes Passed or Failed, and the formula reads the rows as it always did.
   Fixed: {
     stage: 'Test',
     role: 'QA',
-    deferredTo: 'step 10, the retest that follows a fix',
+    retest: true,
+    confirm: (port, component) => port.testRowsReal(component.id),
   },
 
+  // The one irreversible public step. It waits for a named person, and the
+  // deploy runs in the manager rather than in a worker, because a worker
+  // would have to be handed the publish key to do it.
   'To be deployed': {
     stage: 'Deploy',
     role: 'DevOps',
-    deferredTo:
-      'step 11, which needs a person to approve before anything ships',
+    gated: true,
+    evidence: {
+      field: 'productionUrl',
+      extract: (report) => extractLink(report),
+      check: (port, claim) => port.linkLives(claim),
+      missing:
+        'deployed, but reported no production URL. A live URL is the only thing that records this.',
+    },
   },
 
   // Completed is the end. Nothing to do.
 };
 
-export function actionFor(
-  status: DevelopmentStatus | undefined,
-): StageAction | undefined {
-  return status === undefined ? undefined : PLAN[status];
+/**
+ * The Document stage. It has no status of its own: a shipped component still
+ * reads To be deployed until its page exists, because Completed needs both a
+ * production URL and a docs link. So the production URL is what tells these
+ * two apart.
+ */
+export const DOCUMENT_ACTION: StageAction = {
+  stage: 'Document',
+  role: 'Manager',
+  // The page is structurally complete. Whether it is any good is not
+  // something a check can answer, and CLAUDE.md says so: the manager checks
+  // the page exists and has every section, a person reads the writing.
+  signOff:
+    'The page is there and every required section is present. That is all this check can tell you. Somebody still has to read it and say whether it is any good, and this component is not really finished until they have.',
+  evidence: {
+    field: 'astro',
+    extract: (report) => extractLink(report),
+    check: (port, claim) => port.docsPageComplete(claim),
+    missing:
+      'wrote the page but reported no URL for it. The page has to be reachable to count.',
+  },
+};
+
+/**
+ * What this component needs next. Takes the row rather than the status,
+ * because one status can mean two different things depending on what evidence
+ * is already there.
+ */
+export function actionFor(component: ComponentRow): StageAction | undefined {
+  const status = component.status;
+  if (status === undefined) return undefined;
+
+  // Shipped, but with no page yet. The formula cannot tell these apart, so
+  // the evidence does.
+  if (status === 'To be deployed' && component.productionUrl !== undefined) {
+    return DOCUMENT_ACTION;
+  }
+
+  return PLAN[status];
 }

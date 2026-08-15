@@ -16,8 +16,9 @@ Run before you package, and give a short report.
 
 ## Git
 
-- Every component branch opens a PR to staging, never to main. Production merges come from staging after it is verified.
-- Do not push or open PRs automatically. Do the work, report it ready, wait to be asked.
+- The safe line is the branch, not the push. The engineer pushes to its own component branch, and that push is required, not optional: a commit becomes evidence only when the manager resolves it through the GitHub API, and an unpushed commit can never resolve. A component branch ships nothing.
+- The crew never pushes to staging or main, and never opens a PR into them on its own. Opening the PR to staging is DevOps's step (step 8). Production merges come from staging after it is verified, behind the human gate.
+- Verification and mutation are on separate credentials. The crew's GitHub token is read-only, so it cannot push even if asked. The branch push runs on the design-system repo's own git auth.
 
 ## Runtime
 

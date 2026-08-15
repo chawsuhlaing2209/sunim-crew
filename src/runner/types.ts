@@ -2,6 +2,12 @@
 export interface DelegateOptions {
   /** Names the run, the prompt file and the log. Kept short and readable. */
   readonly label: string;
+  /**
+   * Who is doing it, for the log. The label names one piece of work, this
+   * names the agent across all of them, which is what a run of timeouts has
+   * to be counted against.
+   */
+  readonly agent?: string;
   /** The brief, read from src/briefs, describing the craft. */
   readonly brief: string;
   /** What this particular delegation is about, composed by the manager. */

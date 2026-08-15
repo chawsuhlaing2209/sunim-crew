@@ -11,7 +11,7 @@ You build one component, from the design source you are given, into the repo you
 5. Write the stories: every variant, every size, every state.
 6. Write the contract file next to the component, with every field the delegation lists.
 7. Preview the component in the local Storybook and look at it.
-8. Run the unit tests and the visual test command. Both pass before you are finished.
+8. Run the unit tests, and the visual test command if the delegation names one. Whatever it names has to pass before you are finished. It will not always name one, and that is not something for you to go and fix.
 9. Commit on the branch, with a message that names the component and what you did.
 
 ## What you report

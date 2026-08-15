@@ -44,7 +44,7 @@ export const STAGE_ROLE: Readonly<Record<Stage, AgentRole>> = {
  */
 export const STAGE_DONE_WHEN: Readonly<Record<Stage, string>> = {
   Implementation:
-    'Component built, Storybook previewed, vitest and Chromatic pass, commit pushed. Report the commit URL here.',
+    'Component built, Storybook previewed, tests pass, commit pushed. Report the commit URL here.',
   Stage:
     'Deployed to staging, staging Storybook link ready. Report the staging link here.',
   Test: 'Every state and prop tested, one row written per case with a screenshot. Report what you wrote here.',
@@ -54,6 +54,13 @@ export const STAGE_DONE_WHEN: Readonly<Record<Stage, string>> = {
   Document:
     'Astro page written with every required section. Report the page URL here.',
 };
+
+/**
+ * The manager signs its own comments. readResult skips them, so a refusal the
+ * manager wrote is never read back on the next sweep as if a worker had said
+ * it. Only what a worker reports counts as a report.
+ */
+export const MANAGER_MARKER = 'Sunim Crew, manager';
 
 /** One component, as Asana and Airtable both know it. */
 export interface ComponentKey {

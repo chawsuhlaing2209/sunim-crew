@@ -54,6 +54,16 @@ function baseTables(): BaseTable[] {
         { id: 'fldResult', name: 'Testing Results', type: 'singleSelect' },
         { id: 'fldLink', name: 'Components', type: 'multipleRecordLinks' },
         { id: 'fldShot', name: 'Screenshot', type: 'multipleAttachments' },
+        {
+          id: 'fldExpected',
+          name: 'Expected Results',
+          type: 'multilineText',
+        },
+        {
+          id: 'fldSuggestion',
+          name: 'Suggestion for Improvement',
+          type: 'multilineText',
+        },
       ],
     },
   ];

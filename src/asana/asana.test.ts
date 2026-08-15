@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   KEY_MARKER,
+  MANAGER_MARKER,
   STAGE_ROLE,
   TaskKeyConflictError,
   airtableRowUrl,
@@ -16,8 +17,8 @@ import type {
   TaskData,
 } from './index.js';
 
-const PROJECT = '1217480511837232';
-const WORKSPACE = '1201713426890112';
+const PROJECT = '0000000000000001';
+const WORKSPACE = '0000000000000002';
 
 /** An Asana that lives in memory, so no test touches the network. */
 function fakeAsana(): { gateway: AsanaGateway; tasks: Map<string, TaskData> } {
@@ -108,11 +109,11 @@ function fakeAsana(): { gateway: AsanaGateway; tasks: Map<string, TaskData> } {
 
 const KEY = {
   component: 'Button',
-  recordId: 'recXEED0zlz31skvt',
+  recordId: 'recXXXXXXXXXXXXXX',
   rowUrl: airtableRowUrl(
-    'appZaeKPj6g6ls6MO',
-    'tblej9RmBwH3kCR5N',
-    'recXEED0zlz31skvt',
+    'appXXXXXXXXXXXXXX',
+    'tblXXXXXXXXXXXXXX',
+    'recXXXXXXXXXXXXXX',
   ),
 };
 
@@ -164,7 +165,7 @@ describe('the client', () => {
 
     expect(task.name).toBe('Button');
     expect(task.key.recordId).toBe(KEY.recordId);
-    expect(task.key.rowUrl).toContain('recXEED0zlz31skvt');
+    expect(task.key.rowUrl).toContain('recXXXXXXXXXXXXXX');
   });
 
   it('finds the same task again instead of making a second one', async () => {
@@ -292,6 +293,26 @@ describe('the client', () => {
     expect(report?.source).toBe('comment');
     expect(report?.text).toContain('commit/abc1234');
     expect(report?.authorName).toBe('Engineer');
+  });
+
+  it('never reads the manager’s own note back as a worker report', async () => {
+    const task = await client.ensureComponentTask(KEY);
+    const subtask = await client.ensureSubtask(task.gid, 'Implementation');
+
+    await client.reportOnSubtask(
+      subtask.gid,
+      'Built. Commit https://github.com/owner/ds/commit/abc1234',
+    );
+    // The manager refuses it, and its refusal is the newest comment.
+    await client.reportOnSubtask(
+      subtask.gid,
+      `${MANAGER_MARKER}\n\nThat commit does not resolve.`,
+    );
+
+    const report = await client.readResult(subtask.gid);
+
+    expect(report?.text).toContain('commit/abc1234');
+    expect(report?.text).not.toContain(MANAGER_MARKER);
   });
 
   it('falls back to the description when no comment was written', async () => {
