@@ -1,0 +1,80 @@
+{
+  "$comment": [
+    "The Sunim Crew base, schema only. No rows, no data, nothing of anyone's.",
+    "Create it with: npm run base:create",
+    "",
+    "The Development field is the point of the whole thing. It is a formula,",
+    "so nobody can set it: it reads the evidence fields and computes the",
+    "stage. If you build this base by hand, that field must be a formula.",
+    "",
+    "Field NAMES are what the crew addresses. A duplicated base keeps the",
+    "names and gets new ids, and the crew resolves names to ids at startup."
+  ],
+  "name": "Sunim Design System",
+  "tables": [
+    {
+      "name": "Components",
+      "description": "One row per component. The status is derived, never typed in.",
+      "fields": [
+        { "name": "Components", "type": "singleLineText" },
+        { "name": "Figma", "type": "url" },
+        { "name": "Design", "type": "url" },
+        { "name": "Commit", "type": "url" },
+        { "name": "Storybook", "type": "url" },
+        { "name": "Staging URL", "type": "url" },
+        { "name": "Production URL", "type": "url" },
+        { "name": "Astro Link", "type": "url" }
+      ]
+    },
+    {
+      "name": "Storybook Testing",
+      "description": "One row per test case. A row with no screenshot does not count.",
+      "fields": [
+        { "name": "Component/Sub Component", "type": "singleLineText" },
+        {
+          "name": "Testing Results",
+          "type": "singleSelect",
+          "options": {
+            "choices": [
+              { "name": "Passed" },
+              { "name": "Failed" },
+              { "name": "Fixed (To re-test)" }
+            ]
+          }
+        },
+        { "name": "Expected Results", "type": "multilineText" },
+        { "name": "Suggestion for Improvement", "type": "multilineText" },
+        { "name": "Attachment", "type": "multipleAttachments" }
+      ]
+    }
+  ],
+  "$afterwards": {
+    "$comment": [
+      "These cannot be created through the API in one pass, because they",
+      "depend on the tables existing first. Add them by hand, once.",
+      "The script prints these instructions when it finishes."
+    ],
+    "link": {
+      "table": "Storybook Testing",
+      "field": "Composed in",
+      "type": "multipleRecordLinks",
+      "linkedTo": "Components"
+    },
+    "rollups": [
+      "Components: Total Tests, a count of linked Storybook Testing rows",
+      "Components: Passed Tests, a rollup counting rows whose result is Passed",
+      "Components: Synchronization %, a formula of your choosing"
+    ],
+    "developmentFormula": {
+      "table": "Components",
+      "field": "Development",
+      "type": "formula",
+      "$comment": [
+        "The stage, derived from evidence. Adjust the field names if you",
+        "renamed any, and keep the order: a part-done fix round is Fixing,",
+        "not To be fixed."
+      ],
+      "formula": "IF(AND({Production URL}, {Astro Link}), 'Completed', IF(AND({Total Tests} > 0, {Failed Tests} = 0, {Retest Tests} > 0), 'Fixed', IF(AND({Retest Tests} > 0, {Failed Tests} > 0), 'Fixing', IF({Failed Tests} > 0, 'To be fixed', IF(AND({Total Tests} > 0, {Passed Tests} = {Total Tests}), 'To be deployed', IF({Storybook}, 'Ready for Testing', IF({Commit}, 'To be staged', 'To-do')))))))"
+    }
+  }
+}
