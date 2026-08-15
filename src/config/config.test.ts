@@ -179,6 +179,22 @@ describe('loadConfig', () => {
     }
   });
 
+  it('treats a mis-parsed comment as absent, not as a token', () => {
+    // Node's --env-file leaves the inline comment on the last assignment in
+    // a file. Believed literally, a fresh clone would think it can publish.
+    const config = loadConfig({
+      env: {
+        ...secrets,
+        NPM_TOKEN: '# npmjs.com > Access Tokens, publish scope',
+        CHROMATIC_TOKEN: '   # chromatic.com > your project',
+      },
+      project,
+    });
+
+    expect(config.npm.token).toBeUndefined();
+    expect(config.chromatic.projectToken).toBeUndefined();
+  });
+
   it('treats an empty value as absent, in the file and the environment', () => {
     expect(() =>
       loadConfig({ env: { ...secrets, ASANA_TOKEN: '   ' }, project }),

@@ -121,10 +121,24 @@ export class ConfigError extends Error {
 type Env = Readonly<Record<string, string | undefined>>;
 type Plain = Record<string, unknown>;
 
-/** An unset variable and an empty one mean the same thing: absent. */
+/**
+ * An unset variable and an empty one mean the same thing: absent.
+ *
+ * A value that begins with # is also absent. That is what a mis-parsed
+ * comment looks like, and Node's --env-file leaves the inline comment on the
+ * final assignment in a file, so a .env ending in
+ *
+ *   NPM_TOKEN=            # npmjs.com, publish scope
+ *
+ * hands back the comment as the value. Read literally, a fresh clone would
+ * believe it holds a publish key. No real token starts with a hash.
+ */
 function value(env: Env, key: string): string | undefined {
   const raw = env[key];
-  return typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : undefined;
+  if (typeof raw !== 'string') return undefined;
+
+  const trimmed = raw.trim();
+  return trimmed === '' || trimmed.startsWith('#') ? undefined : trimmed;
 }
 
 function setPath(target: Plain, path: string, next: string): void {
