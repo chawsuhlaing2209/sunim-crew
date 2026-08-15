@@ -1,8 +1,10 @@
 export {
   DEFAULT_TIMEOUT_MS,
+  FAILURE_DETAIL_LIMIT,
   KILL_GRACE_MS,
   composePrompt,
   delegate,
+  failureFrom,
   readFinal,
   runId,
 } from './delegate.js';

@@ -8,11 +8,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ALWAYS_DISALLOWED_TOOLS,
   FORBIDDEN_IN_CHILD,
+  FAILURE_DETAIL_LIMIT,
   ForbiddenChildKeyError,
   buildArgs,
   childEnv,
   composePrompt,
   delegate,
+  failureFrom,
   readFinal,
   runId,
 } from './index.js';
@@ -421,6 +423,46 @@ describe('delegate', () => {
     const result = await run;
 
     expect(result.ok).toBe(false);
+  });
+
+  it('reports why the run failed, in the worker’s own words', async () => {
+    // What a real refusal looks like: the protocol finished, so subtype says
+    // "success", and the run did not. Repeating the subtype back gives
+    // "exit 1, success", which tells the operator nothing at all.
+    const fake = fakeSpawn();
+    const run = delegate(options(), { spawn: fake.spawn, stamp: () => 'x' });
+    const child = await fake.spawned();
+    child?.stdout.end(
+      resultLine({
+        is_error: true,
+        subtype: 'success',
+        terminal_reason: 'api_error',
+        result: 'Credit balance is too low',
+      }),
+    );
+    child?.emit('close', 1, null);
+
+    const result = await run;
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('exit 1, Credit balance is too low');
+  });
+
+  it('falls back to why it ended when the worker said nothing', () => {
+    expect(failureFrom({ terminal_reason: 'api_error' }, 1)).toBe(
+      'exit 1, api_error',
+    );
+    // Nothing worth repeating. "exit 1, success" is worse than "exit 1".
+    expect(failureFrom({ subtype: 'success' }, 1)).toBe('exit 1');
+    expect(failureFrom({}, null)).toBe('exit null');
+  });
+
+  it('keeps a long refusal to one readable line', () => {
+    const long = 'x'.repeat(FAILURE_DETAIL_LIMIT + 200);
+
+    expect(failureFrom({ result: long }, 1).length).toBeLessThanOrEqual(
+      FAILURE_DETAIL_LIMIT + 10,
+    );
   });
 
   it('says so plainly when the CLI is not there', async () => {

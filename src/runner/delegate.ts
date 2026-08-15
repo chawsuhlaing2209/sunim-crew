@@ -54,6 +54,34 @@ interface ResultEvent {
   readonly total_cost_usd?: number;
   readonly is_error?: boolean;
   readonly subtype?: string;
+  /** Why the run ended, when it ended badly. For example "api_error". */
+  readonly terminal_reason?: string;
+}
+
+/** As much of the child's own account of a failure as a log line can hold. */
+export const FAILURE_DETAIL_LIMIT = 300;
+
+/**
+ * What actually went wrong, in the child's words where it has any.
+ *
+ * The CLI reports a failed run with subtype "success", meaning the protocol
+ * finished, not the work. Repeating that back gives "exit 1, success", which
+ * is the least useful thing this could say about a run that failed. The
+ * result text is where the reason is: "Credit balance is too low", for one.
+ */
+export function failureFrom(
+  final: ResultEvent,
+  exitCode: number | null,
+): string {
+  const said = final.result?.trim();
+  const because =
+    said === undefined || said === ''
+      ? (final.terminal_reason ?? final.subtype)
+      : said.slice(0, FAILURE_DETAIL_LIMIT);
+
+  return because === undefined || because === 'success'
+    ? `exit ${String(exitCode)}`
+    : `exit ${String(exitCode)}, ${because}`;
 }
 
 /**
@@ -241,6 +269,6 @@ export async function delegate(
         ? String(closed.error)
         : ok
           ? undefined
-          : `exit ${String(closed.code)}${final.subtype === undefined ? '' : `, ${final.subtype}`}`,
+          : failureFrom(final, closed.code),
   };
 }
