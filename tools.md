@@ -19,19 +19,19 @@ Sunim Crew. An installable agentic crew that takes a component from Figma to a p
 Node 20+. Prettier: semi true, singleQuote true, trailingComma all, printWidth 80, tabWidth 2.
 
 ## Source of truth and dashboard
-Airtable base `appZaeKPj6g6ls6MO` (Sunim Design System) holds the data and the status. The Development field is a formula, never write it. The crew writes evidence fields, and the formula reacts.
+An Airtable base holds the data and the status. Set its id as `baseId` in config. The Development field is a formula, never write it. The crew writes evidence fields, and the formula reacts.
 
-Components table `tblej9RmBwH3kCR5N`:
-- Figma `fldYcRaMUfGjKIL71`, Design `fldK2Dp1iUf2mG0M1`
-- Commit `fldTfzIqK9dn3tCka`
-- Storybook, the staging link `fldOuJpSivewZrGyt`, Staging URL `fld7nrL1kTQjuj6ka`
-- Production URL `fldM0MT30IJzinv2X`, Astro Link `fldmIejCh2VfmBkmP`
-- Development, formula `fldOLGT24LDXAzsZ7`, Synchronization % `fldmDi7UodNK4c2xZ`
-- Total Tests `fldyYyEn5KfFGEuUu`, Passed Tests `fldlUuOcmKdDULk5q`, Testing Results Summary `fldwq0iaM1TdGJtEL`
+Components table `Components`:
+- Figma, Design
+- Commit
+- Storybook, the staging link, Staging URL
+- Production URL, Astro Link
+- Development, a formula, and Synchronization %
+- Total Tests, Passed Tests, Testing Results Summary
 
-Test rows table Storybook Testing `tblzVgnActM210oLc`: Testing Results `fldLpiJh4iuVf2Vkc` (Passed, Failed, Fixed (To re-test)), linked to Components via `fldjU0dkzPmQJ0Z3W`.
+Test rows table `Storybook Testing`: Testing Results (Passed, Failed, Fixed (To re-test)), linked to Components.
 
-These ids belong to this base only. A duplicated base keeps the field and table names but gets new ids, so the crew never hardcodes an id. It addresses Airtable by name from config (below) and resolves names to the base's ids at startup. The ids above are for reference and for the one-time formula setup.
+The crew never hardcodes an id. It addresses Airtable by name from config (below) and resolves those names to the base's own ids at startup, so a duplicated base needs only its id and token changed. The one-time formula setup does need your base's own field ids, which Airtable lists in the API reference for your base.
 
 The derived-status logic is in `docs/crew.md`.
 

@@ -17,8 +17,8 @@ import type {
   TaskData,
 } from './index.js';
 
-const PROJECT = '1217480511837232';
-const WORKSPACE = '1201713426890112';
+const PROJECT = '0000000000000001';
+const WORKSPACE = '0000000000000002';
 
 /** An Asana that lives in memory, so no test touches the network. */
 function fakeAsana(): { gateway: AsanaGateway; tasks: Map<string, TaskData> } {
@@ -109,11 +109,11 @@ function fakeAsana(): { gateway: AsanaGateway; tasks: Map<string, TaskData> } {
 
 const KEY = {
   component: 'Button',
-  recordId: 'recXEED0zlz31skvt',
+  recordId: 'recXXXXXXXXXXXXXX',
   rowUrl: airtableRowUrl(
-    'appZaeKPj6g6ls6MO',
-    'tblej9RmBwH3kCR5N',
-    'recXEED0zlz31skvt',
+    'appXXXXXXXXXXXXXX',
+    'tblXXXXXXXXXXXXXX',
+    'recXXXXXXXXXXXXXX',
   ),
 };
 
@@ -165,7 +165,7 @@ describe('the client', () => {
 
     expect(task.name).toBe('Button');
     expect(task.key.recordId).toBe(KEY.recordId);
-    expect(task.key.rowUrl).toContain('recXEED0zlz31skvt');
+    expect(task.key.rowUrl).toContain('recXXXXXXXXXXXXXX');
   });
 
   it('finds the same task again instead of making a second one', async () => {
